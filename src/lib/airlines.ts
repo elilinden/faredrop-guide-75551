@@ -14,6 +14,13 @@ export const manageTripLinks: Record<AirlineKey, string> = {
   AS: 'https://www.alaskaair.com/booking/reservation-lookup',
 };
 
+export const nameRequirements: Record<AirlineKey, 'pnr-last' | 'pnr-first-last'> = {
+  AA: 'pnr-first-last',
+  DL: 'pnr-first-last',
+  UA: 'pnr-last',
+  AS: 'pnr-last',
+};
+
 export const changeFlowTips: Record<AirlineKey, string[]> = {
   AA: [
     'Open "Find your trip," enter confirmation code + last name.',

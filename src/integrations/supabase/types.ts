@@ -82,6 +82,41 @@ export type Database = {
           },
         ]
       }
+      price_checks: {
+        Row: {
+          confidence: string | null
+          created_at: string | null
+          diff_vs_paid: number | null
+          id: string
+          observed_price: number | null
+          trip_id: string | null
+        }
+        Insert: {
+          confidence?: string | null
+          created_at?: string | null
+          diff_vs_paid?: number | null
+          id?: string
+          observed_price?: number | null
+          trip_id?: string | null
+        }
+        Update: {
+          confidence?: string | null
+          created_at?: string | null
+          diff_vs_paid?: number | null
+          id?: string
+          observed_price?: number | null
+          trip_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_checks_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_signals: {
         Row: {
           confidence: string | null
@@ -231,9 +266,13 @@ export type Database = {
           depart_date: string | null
           first_name: string | null
           id: string
+          last_checked_at: string | null
+          last_confidence: string | null
           last_name: string
+          last_public_price: number | null
           last_signal_at: string | null
           last_signal_price: number | null
+          monitor_frequency_minutes: number | null
           monitor_threshold: number | null
           monitoring_enabled: boolean | null
           notes: string | null
@@ -254,9 +293,13 @@ export type Database = {
           depart_date?: string | null
           first_name?: string | null
           id?: string
+          last_checked_at?: string | null
+          last_confidence?: string | null
           last_name: string
+          last_public_price?: number | null
           last_signal_at?: string | null
           last_signal_price?: number | null
+          monitor_frequency_minutes?: number | null
           monitor_threshold?: number | null
           monitoring_enabled?: boolean | null
           notes?: string | null
@@ -277,9 +320,13 @@ export type Database = {
           depart_date?: string | null
           first_name?: string | null
           id?: string
+          last_checked_at?: string | null
+          last_confidence?: string | null
           last_name?: string
+          last_public_price?: number | null
           last_signal_at?: string | null
           last_signal_price?: number | null
+          monitor_frequency_minutes?: number | null
           monitor_threshold?: number | null
           monitoring_enabled?: boolean | null
           notes?: string | null

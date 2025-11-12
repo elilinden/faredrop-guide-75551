@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.purge-deleted-trips]
 verify_jwt = false
+
+[functions.price-watch]
+verify_jwt = false
+
+[functions.check-now]
+verify_jwt = false

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,8 +18,8 @@ import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
 import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { DeleteTripDialog } from "@/components/DeleteTripDialog";
-import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2 } from "lucide-react";
-import { format } from "date-fns";
+import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
 import { logAudit } from "@/lib/audit";
@@ -33,6 +34,8 @@ const TripDetail = () => {
   const [monitorThreshold, setMonitorThreshold] = useState(20);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCheckingNow, setIsCheckingNow] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -77,6 +80,29 @@ const TripDetail = () => {
       fetchTrip();
     }
   }, [id, navigate]);
+
+  // Auto-refresh polling
+  useEffect(() => {
+    if (!autoRefresh || !id) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const { data: tripData } = await supabase
+          .from("trips")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (tripData) {
+          setTrip(tripData);
+        }
+      } catch (error) {
+        console.error("Auto-refresh error:", error);
+      }
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, id]);
 
   if (loading) {
     return (
@@ -229,6 +255,43 @@ const TripDetail = () => {
     }
   };
 
+  const handleCheckNow = async () => {
+    setIsCheckingNow(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('check-now', {
+        body: { tripId: trip.id },
+      });
+
+      if (error) throw error;
+
+      // Refresh trip data
+      const { data: tripData } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("id", trip.id)
+        .single();
+
+      if (tripData) {
+        setTrip(tripData);
+      }
+
+      toast({
+        title: "Price check complete",
+        description: data.last_public_price 
+          ? `Current price: $${data.last_public_price}`
+          : "No pricing data available yet",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to check price",
+        description: error.message,
+      });
+    } finally {
+      setIsCheckingNow(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -310,16 +373,99 @@ const TripDetail = () => {
 
             <Card>
               <CardHeader>
+                <CardTitle className="text-base">Price Watch Status</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Last checked:</span>
+                    <span className="font-medium">
+                      {trip.last_checked_at 
+                        ? formatDistanceToNow(new Date(trip.last_checked_at), { addSuffix: true })
+                        : "Never"}
+                    </span>
+                  </div>
+                  
+                  {trip.last_public_price && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Last observed:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">${trip.last_public_price.toFixed(2)}</span>
+                          {trip.last_confidence && (
+                            <Badge variant="outline" className="text-xs">
+                              {trip.last_confidence === 'exact-flight' ? 'Exact' : 'Estimate'}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {trip.last_public_price < trip.paid_total && (
+                        <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-green-800 dark:text-green-200 font-medium">
+                              Potential drop:
+                            </span>
+                            <span className="text-green-600 dark:text-green-400 font-bold">
+                              ${(trip.paid_total - trip.last_public_price).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={handleCheckNow}
+                      disabled={isCheckingNow}
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                    >
+                      {isCheckingNow ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+                          Checking...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3 h-3 mr-2" />
+                          Check now
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-muted-foreground" />
+                      <Label htmlFor="auto-refresh" className="text-sm cursor-pointer">
+                        Auto-refresh (10s)
+                      </Label>
+                    </div>
+                    <Switch
+                      id="auto-refresh"
+                      checked={autoRefresh}
+                      onCheckedChange={setAutoRefresh}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle className="text-base">Price Monitoring</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="monitoring" className="text-sm font-medium">
-                      Email me if prices might drop
+                      Email alerts every 3h
                     </Label>
                     <p className="text-xs text-muted-foreground">
-                      We check public fares every 6 hours
+                      We check public fares automatically
                     </p>
                   </div>
                   <Switch
@@ -347,7 +493,7 @@ const TripDetail = () => {
                       />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Minimum savings to trigger an alert
+                      Minimum savings to trigger an email
                     </p>
                   </div>
                 )}
