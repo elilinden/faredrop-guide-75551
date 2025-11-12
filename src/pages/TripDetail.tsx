@@ -19,7 +19,8 @@ import { EligibilityPill } from "@/components/EligibilityPill";
 import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { DeleteTripDialog } from "@/components/DeleteTripDialog";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
-import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock, AlertTriangle } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
@@ -439,26 +440,55 @@ const TripDetail = () => {
                     </>
                   )}
 
+                  {segments.length === 0 && (
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="space-y-2 flex-1">
+                          <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                            Flight details required
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-300">
+                            Add flight segments to enable price monitoring
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 pt-2">
-                    <Button
-                      onClick={handleCheckNow}
-                      disabled={isCheckingNow}
-                      size="sm"
-                      variant="outline"
-                      className="flex-1"
-                    >
-                      {isCheckingNow ? (
-                        <>
-                          <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
-                          Checking...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="w-3 h-3 mr-2" />
-                          Check now
-                        </>
-                      )}
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex-1">
+                            <Button
+                              onClick={handleCheckNow}
+                              disabled={isCheckingNow || segments.length === 0}
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                            >
+                              {isCheckingNow ? (
+                                <>
+                                  <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+                                  Checking...
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3 h-3 mr-2" />
+                                  Check now
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </TooltipTrigger>
+                        {segments.length === 0 && (
+                          <TooltipContent>
+                            <p>Add flight segments to enable price checking</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t">
