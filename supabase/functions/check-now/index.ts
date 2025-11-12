@@ -84,7 +84,8 @@ function mapTripToSearchParams(trip: any) {
     origin = origin || firstSegment.depart_airport;
     destination = destination || lastSegment.arrive_airport;
     departureDate = departureDate || firstSegment.depart_datetime?.split('T')[0];
-    returnDate = returnDate || (sortedSegments.length > 1 ? lastSegment.arrive_datetime?.split('T')[0] : undefined);
+    // For round trips, use last segment's DEPARTURE date (when return flight takes off)
+    returnDate = returnDate || (sortedSegments.length > 1 ? lastSegment.depart_datetime?.split('T')[0] : undefined);
   }
 
   const adults = trip.adults ?? 1;
@@ -253,18 +254,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Rate limit: max 1 manual check per 10 minutes
+    // Rate limit: max 1 manual check per 2 minutes
     if (trip.last_checked_at) {
       const lastChecked = new Date(trip.last_checked_at);
       const now = new Date();
       const minutesSinceCheck = (now.getTime() - lastChecked.getTime()) / (1000 * 60);
 
-      if (minutesSinceCheck < 10) {
+      if (minutesSinceCheck < 2) {
         return new Response(
           JSON.stringify({
             error: "Rate limit exceeded",
-            message: "Please wait 10 minutes between manual checks",
-            retryAfter: Math.ceil(10 - minutesSinceCheck),
+            message: "Please wait 2 minutes between manual checks",
+            retryAfter: Math.ceil(2 - minutesSinceCheck),
           }),
           {
             status: 429,

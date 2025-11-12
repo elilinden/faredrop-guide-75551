@@ -238,8 +238,10 @@ const TripNew = () => {
           departure_date = firstSeg.depart_datetime.split('T')[0]; // Extract YYYY-MM-DD
         }
         
-        if (lastSeg.arrive_datetime && segments.length > 1) {
-          return_date = lastSeg.arrive_datetime.split('T')[0];
+        // For round trips, use the LAST segment's DEPARTURE date as the return date
+        // (not arrival, which can be parsed incorrectly)
+        if (segments.length > 1 && lastSeg.depart_datetime) {
+          return_date = lastSeg.depart_datetime.split('T')[0];
         }
         
         flight_numbers = segments
