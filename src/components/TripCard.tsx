@@ -3,10 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
-import { Calendar, DollarSign, ArrowRight, Bell, BellOff } from "lucide-react";
+import { Calendar, DollarSign, ArrowRight, Bell, BellOff, Clock } from "lucide-react";
 import { Link } from "react-router-dom";
 import { type AirlineKey } from "@/lib/airlines";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 
 interface TripCardProps {
   trip: {
@@ -18,6 +18,9 @@ interface TripCardProps {
     depart_date: string | null;
     return_date: string | null;
     monitoring_enabled?: boolean;
+    last_checked_at?: string | null;
+    last_public_price?: number | null;
+    last_confidence?: string | null;
   };
   segments: Array<{
     depart_airport: string;
@@ -75,6 +78,28 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
             <span>Paid ${trip.paid_total.toFixed(2)}</span>
           </div>
         </div>
+
+        {trip.last_checked_at && (
+          <div className="mb-3 p-2 bg-muted/50 rounded-md text-xs space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Clock className="w-3 h-3" />
+              <span>Checked {formatDistanceToNow(new Date(trip.last_checked_at), { addSuffix: true })}</span>
+            </div>
+            {trip.last_public_price && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Last price:</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">${trip.last_public_price.toFixed(2)}</span>
+                  {trip.last_public_price < trip.paid_total && (
+                    <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                      ↓ ${(trip.paid_total - trip.last_public_price).toFixed(2)}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <Link to={`/trips/${trip.id}`}>
           <Button variant="outline" className="w-full">
