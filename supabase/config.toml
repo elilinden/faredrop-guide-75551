@@ -1,1 +1,13 @@
 project_id = "mgcbhnbsoqwxramjsjew"
+
+[functions.check-now]
+verify_jwt = true
+
+[functions.price-watch]
+verify_jwt = false
+
+[functions.purge-deleted-trips]
+verify_jwt = false
+
+[functions.price-nudge]
+verify_jwt = false

@@ -13,14 +13,14 @@ interface MagicPasteImporterProps {
 }
 
 export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
-  const [airline, setAirline] = useState<'AA' | 'DL' | 'UA' | 'AS' | ''>('');
+  const [airline, setAirline] = useState<'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6' | ''>('');
   const [rawText, setRawText] = useState('');
   const [parsed, setParsed] = useState<ParsedTrip | null>(null);
 
   const handleParse = () => {
     if (!airline || !rawText.trim()) return;
     
-    const result = parseFromText(airline as 'AA' | 'DL' | 'UA' | 'AS', rawText);
+    const result = parseFromText(airline as 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6', rawText);
     setParsed(result);
   };
 
@@ -54,6 +54,8 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
             <SelectItem value="DL">Delta Air Lines</SelectItem>
             <SelectItem value="UA">United Airlines</SelectItem>
             <SelectItem value="AS">Alaska Airlines</SelectItem>
+            <SelectItem value="WN">Southwest Airlines</SelectItem>
+            <SelectItem value="B6">JetBlue Airways</SelectItem>
           </SelectContent>
         </Select>
       </div>

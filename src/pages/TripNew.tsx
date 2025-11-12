@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plane, ChevronDown, Plus, Trash2, Info, AlertCircle } from "lucide-react";
+import { Plane, ChevronDown, Plus, Trash2, Info, AlertCircle, ExternalLink } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,17 +19,26 @@ import { MagicPasteImporter } from "@/components/MagicPasteImporter";
 import type { ParsedTrip } from "@/lib/import/parsers";
 import { logAudit } from "@/lib/audit";
 
+const manageTripLinks = {
+  AA: 'https://www.aa.com/reservation/view/find-your-reservation',
+  DL: 'https://www.delta.com/my-trips/trip-details',
+  UA: 'https://www.united.com/en/us/manageres/mytrips',
+  AS: 'https://www.alaskaair.com/booking/reservation-lookup',
+  WN: 'https://www.southwest.com/air/manage-reservation/index.html',
+  B6: 'https://www.jetblue.com/manage-trips',
+};
+
 const segmentSchema = z.object({
-  carrier: z.string().min(2, "2-letter carrier code required").max(2, "2 letters only").toUpperCase(),
-  flight_number: z.string().regex(/^[0-9]{1,4}[A-Z]?$/, "Format: 123 or 1234A").min(1, "Flight number required"),
-  depart_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code required").length(3, "3 letters required"),
-  arrive_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code required").length(3, "3 letters required"),
-  depart_datetime: z.string().min(1, "Departure time required"),
-  arrive_datetime: z.string().min(1, "Arrival time required"),
+  carrier: z.string().optional(),
+  flight_number: z.string().optional(),
+  depart_airport: z.string().optional(),
+  arrive_airport: z.string().optional(),
+  depart_datetime: z.string().optional(),
+  arrive_datetime: z.string().optional(),
 });
 
 const baseTripFormSchema = z.object({
-  airline: z.enum(["AA", "DL", "UA", "AS"], { required_error: "Select an airline" }),
+  airline: z.enum(["AA", "DL", "UA", "AS", "WN", "B6"], { required_error: "Select an airline" }),
   confirmation_code: z
     .string()
     .trim()
@@ -47,7 +56,7 @@ const baseTripFormSchema = z.object({
     .optional()
     .or(z.literal("")),
   paid_total: z.coerce.number().min(0, "Must be 0 or greater"),
-  segments: z.array(segmentSchema).min(1, "At least one flight segment required for price checking"),
+  segments: z.array(segmentSchema).optional(),
   brand: z.string().optional(),
   ticket_number: z.string().regex(/^[0-9]{13}$/, "13 digits").optional().or(z.literal("")),
   rbd: z.string().regex(/^[A-Z]$/, "Single letter").optional().or(z.literal("")),
@@ -66,9 +75,7 @@ const TripNew = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([
-    { carrier: "", flight_number: "", depart_airport: "", arrive_airport: "", depart_datetime: "", arrive_datetime: "" }
-  ]);
+  const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([]);
   const [duplicateTrip, setDuplicateTrip] = useState<{ id: string; airline: string; pnr: string } | null>(null);
 
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<TripFormData>({
@@ -307,12 +314,14 @@ const TripNew = () => {
                       <SelectTrigger>
                         <SelectValue placeholder="Select airline" />
                       </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="AA">American Airlines</SelectItem>
-                        <SelectItem value="DL">Delta Air Lines</SelectItem>
-                        <SelectItem value="UA">United Airlines</SelectItem>
-                        <SelectItem value="AS">Alaska Airlines</SelectItem>
-                      </SelectContent>
+              <SelectContent>
+                <SelectItem value="AA">American Airlines</SelectItem>
+                <SelectItem value="DL">Delta Air Lines</SelectItem>
+                <SelectItem value="UA">United Airlines</SelectItem>
+                <SelectItem value="AS">Alaska Airlines</SelectItem>
+                <SelectItem value="WN">Southwest Airlines</SelectItem>
+                <SelectItem value="B6">JetBlue Airways</SelectItem>
+              </SelectContent>
                     </Select>
                   )}
                 />
@@ -418,27 +427,74 @@ const TripNew = () => {
             </CardContent>
           </Card>
 
-          {/* Flight Segments Section - Required for Price Checking */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Flight Details</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Required for automatic price monitoring and alerts
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-base">Flight Segments</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addSegment}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Segment
-                </Button>
+          {/* Fallback UI when no segments */}
+          {segments.length === 0 && (
+            <Card className="p-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+              <div className="flex gap-3">
+                <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-3 flex-1">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    We can't fetch your itinerary automatically from PNR. To enable price monitoring:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const tabsTrigger = document.querySelector('[value="import"]') as HTMLElement;
+                        tabsTrigger?.click();
+                      }}
+                      className="h-8"
+                    >
+                      Paste Confirmation Email
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addSegment()}
+                      className="h-8"
+                    >
+                      Enter Flight Details Manually
+                    </Button>
+                    {selectedAirline && manageTripLinks[selectedAirline as keyof typeof manageTripLinks] && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        asChild
+                        className="h-8"
+                      >
+                        <a
+                          href={manageTripLinks[selectedAirline as keyof typeof manageTripLinks]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1"
+                        >
+                          Open {selectedAirline} Manage Trip
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-              {errors.segments?.message && (
-                <p className="text-sm text-destructive">{errors.segments.message}</p>
-              )}
-              <div className="space-y-4">
-                {segments.map((seg, idx) => (
+            </Card>
+          )}
+
+          {/* Flight Segments Section - Conditional */}
+          {segments.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Flight Details</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Used for automatic price monitoring and alerts
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-4">
+                  {segments.map((seg, idx) => (
                   <Card key={idx} className="border-2">
                     <CardContent className="pt-4 space-y-3">
                       <div className="flex items-center justify-between mb-2">
@@ -455,79 +511,78 @@ const TripNew = () => {
                         )}
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-xs">Carrier *</Label>
+                         <div>
+                          <Label className="text-xs">Carrier</Label>
                           <Input
-                            value={seg.carrier}
+                            value={seg.carrier || ""}
                             onChange={(e) =>
                               updateSegment(idx, "carrier", e.target.value.toUpperCase())
                             }
                             placeholder="DL"
                             maxLength={2}
                             className="uppercase"
-                            required
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Flight # *</Label>
+                          <Label className="text-xs">Flight #</Label>
                           <Input
-                            value={seg.flight_number}
+                            value={seg.flight_number || ""}
                             onChange={(e) => updateSegment(idx, "flight_number", e.target.value)}
                             placeholder="1234"
-                            required
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">From *</Label>
+                          <Label className="text-xs">From</Label>
                           <Input
-                            value={seg.depart_airport}
+                            value={seg.depart_airport || ""}
                             onChange={(e) =>
                               updateSegment(idx, "depart_airport", e.target.value.toUpperCase())
                             }
                             placeholder="JFK"
                             maxLength={3}
                             className="uppercase"
-                            required
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">To *</Label>
+                          <Label className="text-xs">To</Label>
                           <Input
-                            value={seg.arrive_airport}
+                            value={seg.arrive_airport || ""}
                             onChange={(e) =>
                               updateSegment(idx, "arrive_airport", e.target.value.toUpperCase())
                             }
                             placeholder="LAX"
                             maxLength={3}
                             className="uppercase"
-                            required
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Depart *</Label>
+                          <Label className="text-xs">Depart</Label>
                           <Input
                             type="datetime-local"
-                            value={seg.depart_datetime}
+                            value={seg.depart_datetime || ""}
                             onChange={(e) => updateSegment(idx, "depart_datetime", e.target.value)}
-                            required
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Arrive *</Label>
+                          <Label className="text-xs">Arrive</Label>
                           <Input
                             type="datetime-local"
-                            value={seg.arrive_datetime}
+                            value={seg.arrive_datetime || ""}
                             onChange={(e) => updateSegment(idx, "arrive_datetime", e.target.value)}
-                            required
                           />
                         </div>
                       </div>
                     </CardContent>
                   </Card>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={addSegment}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Another Segment
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
             <Card>

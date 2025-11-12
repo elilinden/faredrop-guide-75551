@@ -6,7 +6,7 @@ export type ParsedTrip = {
   brand?: string;
   ticket_number?: string;
   segments?: {
-    carrier?: 'AA' | 'DL' | 'UA' | 'AS';
+    carrier?: 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6';
     flight_number?: string;
     depart_airport?: string;
     arrive_airport?: string;
@@ -105,12 +105,14 @@ const extractBrand = (text: string, airline: string): string | undefined => {
 };
 
 const extractTicketNumber = (text: string, airline: string): string | undefined => {
-  // Airline-specific prefixes: AA=001, DL=006, UA=016, AS=027
+  // Airline-specific prefixes: AA=001, DL=006, UA=016, AS=027, WN=526, B6=279
   const prefixes: Record<string, string> = {
     AA: '001',
     DL: '006',
     UA: '016',
     AS: '027',
+    WN: '526',
+    B6: '279',
   };
   
   const prefix = prefixes[airline];
@@ -121,9 +123,26 @@ const extractTicketNumber = (text: string, airline: string): string | undefined 
   return match ? match[0] : undefined;
 };
 
+const extractPaidTotal = (text: string): number | undefined => {
+  // Look for total/paid patterns: "Total: $123.45", "Paid $123.45", "$123.45 Total"
+  const patterns = [
+    /(?:total|paid|amount)[\s:]*\$?\s*(\d+\.?\d{0,2})/i,
+    /\$\s*(\d+\.?\d{0,2})\s*(?:total|paid)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return parseFloat(match[1]);
+    }
+  }
+  
+  return undefined;
+};
+
 const extractFlightSegments = (
   text: string,
-  airline: 'AA' | 'DL' | 'UA' | 'AS'
+  airline: 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6'
 ): ParsedTrip['segments'] => {
   const segments: ParsedTrip['segments'] = [];
   const lines = text.split('\n');
@@ -134,6 +153,8 @@ const extractFlightSegments = (
     DL: /DL\s?(\d{1,4}[A-Z]?)\s+([A-Z]{3})[-–]([A-Z]{3})/i,
     UA: /UA\s?(\d{1,4}[A-Z]?)\s+([A-Z]{3})[-–]([A-Z]{3})/i,
     AS: /AS\s?(\d{1,4}[A-Z]?)\s+([A-Z]{3})[-–]([A-Z]{3})/i,
+    WN: /WN\s?(\d{1,4}[A-Z]?)\s+([A-Z]{3})[-–]([A-Z]{3})/i,
+    B6: /B6\s?(\d{1,4}[A-Z]?)\s+([A-Z]{3})[-–]([A-Z]{3})/i,
   };
   
   const pattern = flightPatterns[airline];
@@ -218,7 +239,7 @@ const extractFlightSegments = (
 };
 
 export const parseFromText = (
-  airline: 'AA' | 'DL' | 'UA' | 'AS',
+  airline: 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6',
   raw: string
 ): ParsedTrip => {
   const normalized = normalizeText(raw);
@@ -228,6 +249,7 @@ export const parseFromText = (
   const brand = extractBrand(normalized, airline);
   const ticket_number = extractTicketNumber(normalized, airline);
   const segments = extractFlightSegments(raw, airline);
+  const paid_total = extractPaidTotal(normalized);
   
   // Determine confidence
   let confidence: 'high' | 'medium' | 'low' = 'low';
@@ -238,14 +260,22 @@ export const parseFromText = (
     confidence = 'medium';
   }
   
+  let notes: string | undefined;
+  if (confidence === 'low') {
+    notes = 'Some fields could not be extracted automatically';
+  } else if (confidence === 'medium') {
+    notes = 'Flight details not found. Paste your confirmation email or enter segments manually to enable price monitoring.';
+  }
+  
   return {
     confirmation_code,
     first_name: names.first,
     last_name: names.last,
+    paid_total,
     brand,
     ticket_number,
     segments: segments && segments.length > 0 ? segments : undefined,
     confidence,
-    notes: confidence === 'low' ? 'Some fields could not be extracted automatically' : undefined,
+    notes,
   };
 };
