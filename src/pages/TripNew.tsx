@@ -24,10 +24,11 @@ const segmentSchema = z.object({
   arrive_datetime: z.string().optional().or(z.literal("")),
 });
 
-const tripFormSchema = z.object({
+const baseTripFormSchema = z.object({
   airline: z.enum(["AA", "DL", "UA", "AS"], { required_error: "Select an airline" }),
   confirmation_code: z.string().regex(/^[A-Z0-9]{6}$/, "6 letters/numbers required"),
   last_name: z.string().min(1, "Last name required"),
+  first_name: z.string().optional(),
   paid_total: z.coerce.number().min(0, "Must be 0 or greater"),
   brand: z.string().optional(),
   ticket_number: z.string().regex(/^[0-9]{13}$/, "13 digits").optional().or(z.literal("")),
@@ -35,6 +36,11 @@ const tripFormSchema = z.object({
   notes: z.string().optional(),
   segments: z.array(segmentSchema).optional(),
 });
+
+const tripFormSchema = baseTripFormSchema.refine(
+  (v) => !(v.airline === "AA" || v.airline === "DL") || !!v.first_name,
+  { path: ["first_name"], message: "First name required for this airline" }
+);
 
 type TripFormData = z.infer<typeof tripFormSchema>;
 
@@ -51,6 +57,7 @@ const TripNew = () => {
       airline: undefined,
       confirmation_code: "",
       last_name: "",
+      first_name: "",
       paid_total: 0,
       brand: "",
       ticket_number: "",
@@ -107,6 +114,7 @@ const TripNew = () => {
           airline: data.airline,
           confirmation_code: data.confirmation_code.toUpperCase(),
           last_name: data.last_name,
+          first_name: data.first_name || null,
           paid_total: data.paid_total,
           brand: data.brand || null,
           ticket_number: data.ticket_number || null,
@@ -235,6 +243,28 @@ const TripNew = () => {
                 />
                 {errors.confirmation_code && (
                   <p className="text-sm text-destructive mt-1">{errors.confirmation_code.message}</p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="first_name">
+                  First Name
+                  {(selectedAirline === "AA" || selectedAirline === "DL") && (
+                    <span className="text-destructive ml-1">*</span>
+                  )}
+                </Label>
+                <Controller
+                  name="first_name"
+                  control={control}
+                  render={({ field }) => <Input {...field} id="first_name" placeholder="John" />}
+                />
+                {errors.first_name && (
+                  <p className="text-sm text-destructive mt-1">{errors.first_name.message}</p>
+                )}
+                {(selectedAirline === "AA" || selectedAirline === "DL") && !watch("first_name") && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ⚠️ Required for {selectedAirline === "AA" ? "American" : "Delta"}
+                  </p>
                 )}
               </div>
 

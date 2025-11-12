@@ -18,6 +18,7 @@ interface GuidedRepriceWizardProps {
     airline: AirlineKey;
     confirmation_code: string;
     last_name: string;
+    first_name: string | null;
     brand: string | null;
   };
   onComplete?: () => void;
@@ -180,8 +181,18 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
 
             <CopyableLink url={manageTripLinks[trip.airline]} label="Open Manage Trip page" />
 
+            {!trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && (
+              <AlertBanner variant="warning" title="Missing first name">
+                Add first name to this trip to use Manage Trip reliably with {trip.airline === "AA" ? "American" : "Delta"}.
+              </AlertBanner>
+            )}
+
             <div className="bg-muted/50 border rounded-lg p-4 space-y-3">
-              <p className="text-sm font-medium">You'll need these:</p>
+              <p className="text-sm font-medium">
+                {trip.airline === "AA" || trip.airline === "DL" 
+                  ? "You'll typically need:" 
+                  : "You'll typically need:"}
+              </p>
               
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -195,6 +206,19 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
                   </button>
                 </div>
 
+                {trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">First name:</span>
+                    <button
+                      onClick={() => handleCopyText(trip.first_name!, "First name")}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors"
+                    >
+                      <span className="font-semibold text-sm">{trip.first_name}</span>
+                      <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Last name:</span>
                   <button
@@ -205,7 +229,17 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 </div>
+
+                {trip.first_name && (trip.airline === "UA" || trip.airline === "AS") && (
+                  <p className="text-xs text-muted-foreground italic">
+                    First name ({trip.first_name}) sometimes requested
+                  </p>
+                )}
               </div>
+
+              <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
+                Enter the name exactly as on the ticket (keep hyphens/accents)
+              </p>
             </div>
 
             <div className="space-y-2">

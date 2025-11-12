@@ -1,8 +1,9 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
-import { Calendar, DollarSign, ArrowRight } from "lucide-react";
+import { Calendar, DollarSign, ArrowRight, Bell, BellOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { type AirlineKey } from "@/lib/airlines";
 import { format } from "date-fns";
@@ -16,6 +17,7 @@ interface TripCardProps {
     paid_total: number;
     depart_date: string | null;
     return_date: string | null;
+    monitoring_enabled?: boolean;
   };
   segments: Array<{
     depart_airport: string;
@@ -39,6 +41,18 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <AirlineBadge airline={trip.airline} />
+              {trip.monitoring_enabled !== false && (
+                <Badge variant="secondary" className="text-xs gap-1">
+                  <Bell className="w-3 h-3" />
+                  Monitoring
+                </Badge>
+              )}
+              {trip.monitoring_enabled === false && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <BellOff className="w-3 h-3" />
+                  Off
+                </Badge>
+              )}
               <span className="font-mono text-xs text-muted-foreground">
                 {trip.confirmation_code}
               </span>

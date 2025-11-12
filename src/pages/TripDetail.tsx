@@ -3,6 +3,9 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { GuidedRepriceWizard } from "@/components/GuidedRepriceWizard";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
@@ -10,6 +13,7 @@ import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { Plane, Calendar, DollarSign, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
+import { toast } from "@/hooks/use-toast";
 
 const TripDetail = () => {
   const { id } = useParams();
@@ -17,6 +21,8 @@ const TripDetail = () => {
   const [loading, setLoading] = useState(true);
   const [trip, setTrip] = useState<any>(null);
   const [segments, setSegments] = useState<any[]>([]);
+  const [monitoringEnabled, setMonitoringEnabled] = useState(true);
+  const [monitorThreshold, setMonitorThreshold] = useState(20);
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -46,6 +52,8 @@ const TripDetail = () => {
 
         setTrip(tripData);
         setSegments(segmentsData || []);
+        setMonitoringEnabled(tripData.monitoring_enabled ?? true);
+        setMonitorThreshold(tripData.monitor_threshold ?? 20);
       } catch (error) {
         console.error("Error fetching trip:", error);
         navigate("/dashboard");
@@ -72,6 +80,58 @@ const TripDetail = () => {
   const route = segments.length > 0
     ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
     : "Route details";
+
+  const handleMonitoringToggle = async (enabled: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .update({ monitoring_enabled: enabled })
+        .eq("id", trip.id);
+
+      if (error) throw error;
+
+      setMonitoringEnabled(enabled);
+      toast({
+        title: enabled ? "Monitoring enabled" : "Monitoring disabled",
+        description: enabled
+          ? "We'll email you if prices might drop"
+          : "Price monitoring paused for this trip",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to update monitoring",
+        description: error.message,
+      });
+    }
+  };
+
+  const handleThresholdChange = async (value: string) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue < 0) return;
+
+    setMonitorThreshold(numValue);
+
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .update({ monitor_threshold: numValue })
+        .eq("id", trip.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Threshold updated",
+        description: `We'll notify you if prices drop by $${numValue} or more`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to update threshold",
+        description: error.message,
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -130,6 +190,52 @@ const TripDetail = () => {
                 </div>
 
                 <EligibilityPill brand={trip.brand} />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Price Monitoring</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="monitoring" className="text-sm font-medium">
+                      Email me if prices might drop
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      We check public fares every 6 hours
+                    </p>
+                  </div>
+                  <Switch
+                    id="monitoring"
+                    checked={monitoringEnabled}
+                    onCheckedChange={handleMonitoringToggle}
+                  />
+                </div>
+
+                {monitoringEnabled && (
+                  <div className="space-y-2">
+                    <Label htmlFor="threshold" className="text-sm">
+                      Alert threshold (USD)
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">$</span>
+                      <Input
+                        id="threshold"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={monitorThreshold}
+                        onChange={(e) => handleThresholdChange(e.target.value)}
+                        className="max-w-[120px]"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Minimum savings to trigger an alert
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

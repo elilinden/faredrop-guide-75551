@@ -58,6 +58,10 @@ export const AirlineTipsBox = ({ airline, brand }: AirlineTipsBoxProps) => {
         {tips.footnote}
       </p>
 
+      <p className="text-xs text-muted-foreground mb-4 pb-4 border-b">
+        <strong>Name fields vary by airline:</strong> AA & Delta usually ask for first + last; United & Alaska typically ask for last only. Enter names exactly as on the ticket.
+      </p>
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 text-sm">
           <a
