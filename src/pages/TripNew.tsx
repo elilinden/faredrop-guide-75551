@@ -77,6 +77,7 @@ const TripNew = () => {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([]);
   const [duplicateTrip, setDuplicateTrip] = useState<{ id: string; airline: string; pnr: string } | null>(null);
+  const [activeTab, setActiveTab] = useState("form");
 
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<TripFormData>({
     resolver: zodResolver(tripFormSchema),
@@ -291,7 +292,7 @@ const TripNew = () => {
           We only need what the airline requires to preview your credit.
         </p>
 
-        <Tabs defaultValue="form" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="form">Manual Entry</TabsTrigger>
             <TabsTrigger value="import">Import from Confirmation</TabsTrigger>
@@ -441,10 +442,7 @@ const TripNew = () => {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        const tabsTrigger = document.querySelector('[value="import"]') as HTMLElement;
-                        tabsTrigger?.click();
-                      }}
+                      onClick={() => setActiveTab("import")}
                       className="h-8"
                     >
                       Paste Confirmation Email
