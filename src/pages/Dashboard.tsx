@@ -2,20 +2,61 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { TripCard } from "@/components/TripCard";
 import { Plane, Plus } from "lucide-react";
+import { type AirlineKey } from "@/lib/airlines";
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [trips, setTrips] = useState<any[]>([]);
+  const [segmentsMap, setSegmentsMap] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const fetchData = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate("/auth");
-      } else {
-        setLoading(false);
+        return;
       }
-    });
+
+      // Fetch trips
+      const { data: tripsData, error: tripsError } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+
+      if (tripsError) {
+        console.error("Error fetching trips:", tripsError);
+        setLoading(false);
+        return;
+      }
+
+      setTrips(tripsData || []);
+
+      // Fetch segments for all trips
+      if (tripsData && tripsData.length > 0) {
+        const tripIds = tripsData.map((t) => t.id);
+        const { data: segmentsData, error: segmentsError } = await supabase
+          .from("segments")
+          .select("*")
+          .in("trip_id", tripIds);
+
+        if (!segmentsError && segmentsData) {
+          const map: Record<string, any[]> = {};
+          segmentsData.forEach((seg) => {
+            if (!map[seg.trip_id]) map[seg.trip_id] = [];
+            map[seg.trip_id].push(seg);
+          });
+          setSegmentsMap(map);
+        }
+      }
+
+      setLoading(false);
+    };
+
+    fetchData();
   }, [navigate]);
 
   const handleSignOut = async () => {
@@ -50,9 +91,38 @@ const Dashboard = () => {
           </Link>
         </div>
 
-        <div className="text-center py-16 text-muted-foreground">
-          <p>No trips yet. Add your first booked flight to get started!</p>
-        </div>
+        {trips.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground">
+            <p>No trips yet. Add your first booked flight to get started!</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {["AA", "DL", "UA", "AS"].map((airline) => {
+              const airlineTrips = trips.filter((t) => t.airline === airline);
+              if (airlineTrips.length === 0) return null;
+
+              return (
+                <div key={airline}>
+                  <h2 className="text-lg font-semibold mb-3">
+                    {airline === "AA" && "American Airlines"}
+                    {airline === "DL" && "Delta Air Lines"}
+                    {airline === "UA" && "United Airlines"}
+                    {airline === "AS" && "Alaska Airlines"}
+                  </h2>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {airlineTrips.map((trip) => (
+                      <TripCard
+                        key={trip.id}
+                        trip={trip}
+                        segments={segmentsMap[trip.id] || []}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );
