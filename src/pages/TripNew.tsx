@@ -195,6 +195,42 @@ const TripNew = () => {
         return;
       }
 
+      // Extract flight details from segments for Amadeus pricing
+      let origin_iata = null;
+      let destination_iata = null;
+      let departure_date = null;
+      let return_date = null;
+      let flight_numbers: string[] = [];
+
+      if (segments.length > 0) {
+        const firstSeg = segments[0];
+        const lastSeg = segments[segments.length - 1];
+        
+        origin_iata = firstSeg.depart_airport || null;
+        destination_iata = lastSeg.arrive_airport || null;
+        
+        if (firstSeg.depart_datetime) {
+          departure_date = firstSeg.depart_datetime.split('T')[0]; // Extract YYYY-MM-DD
+        }
+        
+        if (lastSeg.arrive_datetime && segments.length > 1) {
+          return_date = lastSeg.arrive_datetime.split('T')[0];
+        }
+        
+        flight_numbers = segments
+          .filter(seg => seg.flight_number)
+          .map(seg => `${seg.carrier}${seg.flight_number}`);
+      }
+
+      console.log('[TripNew] Saving trip with extracted data:', {
+        origin_iata,
+        destination_iata,
+        departure_date,
+        return_date,
+        flight_numbers,
+        segments: segments.length
+      });
+
       // Insert trip
       const { data: tripData, error: tripError } = await supabase
         .from("trips")
@@ -209,8 +245,14 @@ const TripNew = () => {
           ticket_number: data.ticket_number || null,
           rbd: data.rbd?.toUpperCase() || null,
           notes: data.notes || null,
-          depart_date: null,
-          return_date: null,
+          origin_iata,
+          destination_iata,
+          departure_date,
+          return_date,
+          flight_numbers,
+          adults: 1,
+          cabin: data.brand || 'ECONOMY',
+          depart_date: departure_date, // Legacy field
           currency: "USD",
           status: "active",
         })

@@ -53,32 +53,51 @@ async function getAmadeusAccessToken(): Promise<string> {
 }
 
 /**
- * Extracts trip params from segments.
- * Uses first segment for origin/departure, last segment for destination/return.
+ * Extracts trip params from trip fields or segments.
+ * Prioritizes direct trip fields, falls back to segments.
  */
 function mapTripToSearchParams(trip: any) {
+  console.log('[mapTripToSearchParams] Input trip:', {
+    id: trip.id,
+    origin_iata: trip.origin_iata,
+    destination_iata: trip.destination_iata,
+    departure_date: trip.departure_date,
+    segments_count: trip.segments?.length || 0
+  });
+
+  // Try direct trip fields first
+  let origin = trip.origin_iata;
+  let destination = trip.destination_iata;
+  let departureDate = trip.departure_date;
+  let returnDate = trip.return_date;
+
+  // Fall back to segments if direct fields are missing
   const segments = trip.segments || [];
-  if (segments.length === 0) {
-    return { origin: undefined, destination: undefined, departureDate: undefined, returnDate: undefined, adults: 1, cabin: undefined };
+  if ((!origin || !destination || !departureDate) && segments.length > 0) {
+    const sortedSegments = [...segments].sort((a: any, b: any) => 
+      new Date(a.depart_datetime).getTime() - new Date(b.depart_datetime).getTime()
+    );
+
+    const firstSegment = sortedSegments[0];
+    const lastSegment = sortedSegments[sortedSegments.length - 1];
+
+    origin = origin || firstSegment.depart_airport;
+    destination = destination || lastSegment.arrive_airport;
+    departureDate = departureDate || firstSegment.depart_datetime?.split('T')[0];
+    returnDate = returnDate || (sortedSegments.length > 1 ? lastSegment.arrive_datetime?.split('T')[0] : undefined);
   }
 
-  // Sort segments by departure time
-  const sortedSegments = [...segments].sort((a: any, b: any) => 
-    new Date(a.depart_datetime).getTime() - new Date(b.depart_datetime).getTime()
-  );
-
-  const firstSegment = sortedSegments[0];
-  const lastSegment = sortedSegments[sortedSegments.length - 1];
-
-  const origin = firstSegment.depart_airport;
-  const destination = lastSegment.arrive_airport;
-  
-  // Format dates as YYYY-MM-DD
-  const departureDate = firstSegment.depart_datetime?.split('T')[0];
-  const returnDate = lastSegment.arrive_datetime?.split('T')[0];
-
   const adults = trip.adults ?? 1;
-  const cabin = trip.cabin ?? trip.brand ?? undefined; // 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST'
+  const cabin = trip.cabin ?? trip.brand ?? undefined;
+
+  console.log('[mapTripToSearchParams] Extracted:', {
+    origin,
+    destination,
+    departureDate,
+    returnDate,
+    adults,
+    cabin
+  });
 
   return { origin, destination, departureDate, returnDate, adults, cabin };
 }
@@ -92,9 +111,36 @@ async function fetchPublicFare(
   const { origin, destination, departureDate, returnDate, adults, cabin } = mapTripToSearchParams(trip);
 
   if (!origin || !destination || !departureDate) {
-    console.warn("[fetchPublicFare] Missing origin/destination/departureDate on trip", trip?.id);
+    console.error("[fetchPublicFare] Missing required fields:", {
+      trip_id: trip?.id,
+      origin,
+      destination,
+      departureDate,
+      trip_data: {
+        origin_iata: trip.origin_iata,
+        destination_iata: trip.destination_iata,
+        departure_date: trip.departure_date,
+        segments: trip.segments?.length || 0
+      }
+    });
     return null;
   }
+
+  // Validate date is not in the past
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const depDate = new Date(departureDate);
+  
+  if (depDate < today) {
+    console.error("[fetchPublicFare] Departure date is in the past:", {
+      trip_id: trip?.id,
+      departureDate,
+      today: today.toISOString().split('T')[0]
+    });
+    return null;
+  }
+
+  console.log("[fetchPublicFare] Calling Amadeus with:", { origin, destination, departureDate });
 
   try {
     const token = await getAmadeusAccessToken();
