@@ -45,18 +45,32 @@ async function getAmadeusAccessToken(): Promise<string> {
 }
 
 /**
- * Extracts trip params defensively from your row.
- * Adjust the fallbacks if your column names differ.
+ * Extracts trip params from segments.
+ * Uses first segment for origin/departure, last segment for destination/return.
  */
 function mapTripToSearchParams(trip: any) {
-  const origin = trip.origin_iata ?? trip.from_iata ?? trip.origin ?? trip.from ?? trip.departure_airport ?? undefined;
-  const destination =
-    trip.destination_iata ?? trip.to_iata ?? trip.destination ?? trip.to ?? trip.arrival_airport ?? undefined;
-  const departureDate = trip.departure_date ?? trip.outbound_date ?? trip.start_date ?? trip.date ?? undefined;
-  const returnDate = trip.return_date ?? trip.inbound_date ?? trip.end_date ?? undefined;
+  const segments = trip.segments || [];
+  if (segments.length === 0) {
+    return { origin: undefined, destination: undefined, departureDate: undefined, returnDate: undefined, adults: 1, cabin: undefined };
+  }
+
+  // Sort segments by departure time
+  const sortedSegments = [...segments].sort((a: any, b: any) => 
+    new Date(a.depart_datetime).getTime() - new Date(b.depart_datetime).getTime()
+  );
+
+  const firstSegment = sortedSegments[0];
+  const lastSegment = sortedSegments[sortedSegments.length - 1];
+
+  const origin = firstSegment.depart_airport;
+  const destination = lastSegment.arrive_airport;
+  
+  // Format dates as YYYY-MM-DD
+  const departureDate = firstSegment.depart_datetime?.split('T')[0];
+  const returnDate = lastSegment.arrive_datetime?.split('T')[0];
 
   const adults = trip.adults ?? 1;
-  const cabin = trip.cabin ?? undefined; // 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST'
+  const cabin = trip.cabin ?? trip.brand ?? undefined; // 'ECONOMY' | 'PREMIUM_ECONOMY' | 'BUSINESS' | 'FIRST'
 
   return { origin, destination, departureDate, returnDate, adults, cabin };
 }
@@ -153,16 +167,30 @@ Deno.serve(async (req) => {
       throw new Error("Missing tripId");
     }
 
-    // Fetch trip and verify ownership
+    // Fetch trip with segments and verify ownership
     const { data: trip, error: tripError } = await supabase
       .from("trips")
-      .select("*")
+      .select("*, segments(*)")
       .eq("id", tripId)
       .eq("user_id", user.id)
       .single();
 
     if (tripError || !trip) {
       throw new Error("Trip not found");
+    }
+
+    // Validate trip has segments
+    if (!trip.segments || trip.segments.length === 0) {
+      return new Response(
+        JSON.stringify({
+          error: "No flight segments",
+          message: "Please add flight details in the Advanced section to enable price checking",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Rate limit: max 1 manual check per 10 minutes
