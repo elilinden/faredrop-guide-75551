@@ -6,6 +6,9 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const resendApiKey = Deno.env.get('RESEND_API_KEY');
 const appBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://faredrop.lovable.app';
 
+const AMADEUS_ENV = (Deno.env.get("AMADEUS_ENV") || "test") === "production" ? "production" : "test";
+const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com";
+
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
@@ -45,10 +48,129 @@ function computeCheckFrequency(departDate: string | null, userPrefs: any, tripOv
   return 60; // 1h
 }
 
+/**
+ * Get Amadeus access token.
+ */
+async function getAmadeusAccessToken(): Promise<string> {
+  const clientId = Deno.env.get("AMADEUS_CLIENT_ID");
+  const clientSecret = Deno.env.get("AMADEUS_CLIENT_SECRET");
+  const bearer = Deno.env.get("AMADEUS_API_KEY");
+
+  if (clientId && clientSecret) {
+    const res = await fetch(`${AMADEUS_HOST}/v1/security/oauth2/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Amadeus auth failed: ${res.status} ${text}`);
+    }
+    const data = await res.json();
+    return data.access_token as string;
+  }
+
+  if (bearer) {
+    return bearer.startsWith("Bearer ") ? bearer.slice(7) : bearer;
+  }
+
+  throw new Error("Missing Amadeus credentials: set AMADEUS_CLIENT_ID/AMADEUS_CLIENT_SECRET or AMADEUS_API_KEY.");
+}
+
+/**
+ * Extract trip search parameters from trip data or segments.
+ */
+function mapTripToSearchParams(trip: any) {
+  let origin = trip.origin_iata ?? trip.from_iata ?? trip.origin ?? trip.from;
+  let destination = trip.destination_iata ?? trip.to_iata ?? trip.destination ?? trip.to;
+  let departureDate = trip.depart_date ?? trip.departure_date ?? trip.outbound_date;
+  let returnDate = trip.return_date ?? trip.inbound_date;
+
+  // Try to extract from segments if not found
+  if ((!origin || !destination || !departureDate) && trip.segments?.length > 0) {
+    const firstSeg = trip.segments[0];
+    const lastSeg = trip.segments[trip.segments.length - 1];
+    
+    origin = origin || firstSeg.depart_airport;
+    destination = destination || lastSeg.arrive_airport;
+    
+    if (!departureDate && firstSeg.depart_datetime) {
+      departureDate = firstSeg.depart_datetime.split('T')[0];
+    }
+  }
+
+  const adults = trip.adults ?? 1;
+  const cabin = trip.cabin ?? undefined;
+
+  return { origin, destination, departureDate, returnDate, adults, cabin };
+}
+
 async function fetchPublicFare(trip: any): Promise<{ price: number; confidence: string } | null> {
-  // TODO: Wire real pricing provider (Amadeus/Skyscanner/Duffel)
-  console.log(`[fetchPublicFare] Stub for trip ${trip.id}`);
-  return null;
+  const { origin, destination, departureDate, returnDate, adults, cabin } = mapTripToSearchParams(trip);
+
+  if (!origin || !destination || !departureDate) {
+    console.warn(`[fetchPublicFare] Missing origin/destination/departureDate on trip ${trip.id}`);
+    return null;
+  }
+
+  try {
+    const token = await getAmadeusAccessToken();
+
+    const url = new URL(`${AMADEUS_HOST}/v2/shopping/flight-offers`);
+    url.searchParams.set("originLocationCode", origin);
+    url.searchParams.set("destinationLocationCode", destination);
+    url.searchParams.set("departureDate", departureDate);
+    if (returnDate) url.searchParams.set("returnDate", returnDate);
+    url.searchParams.set("adults", String(adults ?? 1));
+    if (cabin) url.searchParams.set("travelClass", cabin);
+    url.searchParams.set("currencyCode", "USD");
+    url.searchParams.set("max", "10");
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error(`[fetchPublicFare] Amadeus search failed: ${res.status}`, text);
+      return null;
+    }
+
+    const data = (await res.json()) as {
+      data?: Array<{ price?: { grandTotal?: string; currency?: string } }>;
+    };
+
+    const first = data?.data?.[0];
+    const total = first?.price?.grandTotal;
+
+    if (!total) {
+      console.log(`[fetchPublicFare] No offers found for trip ${trip.id}`);
+      return null;
+    }
+
+    // Determine confidence based on exact flight info
+    const hasExactFlightInfo = trip.segments?.length > 0 &&
+      trip.segments.every((s: any) => s.carrier && s.flight_number && s.depart_airport && s.arrive_airport);
+
+    console.log(`[fetchPublicFare] Found price $${total} for trip ${trip.id} (confidence: ${hasExactFlightInfo ? 'exact-flight' : 'route-estimate'})`);
+
+    return {
+      price: Number(total),
+      confidence: hasExactFlightInfo ? "exact-flight" : "route-estimate",
+    };
+  } catch (e) {
+    console.error(`[fetchPublicFare] Error for trip ${trip.id}:`, e);
+    // Dev fallback if enabled
+    if (Deno.env.get("ALLOW_DUMMY_PRICES") === "true") {
+      console.log(`[fetchPublicFare] Using dummy price for trip ${trip.id}`);
+      return { price: 123.45, confidence: "route-estimate" };
+    }
+    return null;
+  }
 }
 
 async function sendPriceAlert(trip: any, diff: number, publicPrice: number) {
@@ -216,10 +338,19 @@ Deno.serve(async (req) => {
   console.log('[price-watch] Starting scheduled check');
 
   try {
-    // Fetch active trips with monitoring enabled
+    // Fetch active trips with monitoring enabled, including segments
     const { data: trips, error } = await supabase
       .from('trips')
-      .select('*')
+      .select(`
+        *,
+        segments (
+          carrier,
+          flight_number,
+          depart_airport,
+          arrive_airport,
+          depart_datetime
+        )
+      `)
       .eq('monitoring_enabled', true)
       .eq('status', 'active')
       .is('deleted_at', null);

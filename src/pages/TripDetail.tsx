@@ -277,7 +277,16 @@ const TripDetail = () => {
         body: { tripId: trip.id },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a rate limit error
+        if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+          // Try to extract retry time from the error
+          const retryMatch = error.message.match(/(\d+)\s*minute/i);
+          const retryMinutes = retryMatch ? parseInt(retryMatch[1]) : 10;
+          throw new Error(`Price checks are limited to once every 10 minutes. Please try again in ${retryMinutes} ${retryMinutes === 1 ? 'minute' : 'minutes'}.`);
+        }
+        throw error;
+      }
 
       // Refresh trip data
       const { data: tripData } = await supabase
