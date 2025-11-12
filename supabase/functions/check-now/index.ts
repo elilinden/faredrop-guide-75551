@@ -88,6 +88,24 @@ function mapTripToSearchParams(trip: any) {
     returnDate = returnDate || (sortedSegments.length > 1 ? lastSegment.depart_datetime?.split('T')[0] : undefined);
   }
 
+  // Normalize if origin equals destination but we have segments (round-trip stored in denormalized fields)
+  if (origin && destination && origin === destination && segments.length > 0) {
+    const outboundDest = segments[0]?.arrive_airport;
+    if (outboundDest && outboundDest !== origin) {
+      destination = outboundDest;
+    }
+  }
+
+  // Ensure chronological order: drop invalid returnDate
+  if (returnDate && departureDate) {
+    const d1 = new Date(departureDate);
+    const d2 = new Date(returnDate);
+    if (!(d2 > d1)) {
+      console.warn('[mapTripToSearchParams] returnDate is not after departureDate; ignoring returnDate', { departureDate, returnDate });
+      returnDate = undefined;
+    }
+  }
+
   const adults = trip.adults ?? 1;
   const cabin = trip.cabin ?? trip.brand ?? undefined;
 
@@ -141,7 +159,7 @@ async function fetchPublicFare(
     return null;
   }
 
-  console.log("[fetchPublicFare] Calling Amadeus with:", { origin, destination, departureDate });
+  console.log("[fetchPublicFare] Calling Amadeus with:", { origin, destination, departureDate, returnDate });
 
   try {
     const token = await getAmadeusAccessToken();
