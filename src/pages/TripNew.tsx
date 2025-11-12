@@ -217,7 +217,34 @@ const TripNew = () => {
         .select()
         .single();
 
-      if (tripError) throw tripError;
+      if (tripError) {
+        // Check if it's a duplicate trip error
+        if (tripError.code === '23505' && tripError.message.includes('trips_user_airline_pnr_last_uq')) {
+          toast({
+            title: "Trip already exists",
+            description: "You already have this trip saved. Redirecting to your trips...",
+            variant: "default",
+          });
+          
+          // Find and navigate to the existing trip
+          const { data: existingTrip } = await supabase
+            .from('trips')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('airline', data.airline)
+            .eq('confirmation_code', data.confirmation_code.toUpperCase())
+            .eq('last_name', data.last_name)
+            .single();
+            
+          if (existingTrip) {
+            navigate(`/trips/${existingTrip.id}`);
+          } else {
+            navigate('/dashboard');
+          }
+          return;
+        }
+        throw tripError;
+      }
 
       // Insert segments if any
       if (segments.length > 0) {
