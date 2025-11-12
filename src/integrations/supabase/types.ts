@@ -257,14 +257,19 @@ export type Database = {
       }
       trips: {
         Row: {
+          adults: number | null
           airline: string
           brand: string | null
+          cabin: string | null
           confirmation_code: string
           created_at: string
           currency: string
           deleted_at: string | null
           depart_date: string | null
+          departure_date: string | null
+          destination_iata: string | null
           first_name: string | null
+          flight_numbers: string[] | null
           id: string
           last_checked_at: string | null
           last_confidence: string | null
@@ -277,6 +282,7 @@ export type Database = {
           monitoring_enabled: boolean | null
           next_check_at: string | null
           notes: string | null
+          origin_iata: string | null
           paid_total: number
           rbd: string | null
           return_date: string | null
@@ -285,14 +291,19 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          adults?: number | null
           airline: string
           brand?: string | null
+          cabin?: string | null
           confirmation_code: string
           created_at?: string
           currency?: string
           deleted_at?: string | null
           depart_date?: string | null
+          departure_date?: string | null
+          destination_iata?: string | null
           first_name?: string | null
+          flight_numbers?: string[] | null
           id?: string
           last_checked_at?: string | null
           last_confidence?: string | null
@@ -305,6 +316,7 @@ export type Database = {
           monitoring_enabled?: boolean | null
           next_check_at?: string | null
           notes?: string | null
+          origin_iata?: string | null
           paid_total: number
           rbd?: string | null
           return_date?: string | null
@@ -313,14 +325,19 @@ export type Database = {
           user_id: string
         }
         Update: {
+          adults?: number | null
           airline?: string
           brand?: string | null
+          cabin?: string | null
           confirmation_code?: string
           created_at?: string
           currency?: string
           deleted_at?: string | null
           depart_date?: string | null
+          departure_date?: string | null
+          destination_iata?: string | null
           first_name?: string | null
+          flight_numbers?: string[] | null
           id?: string
           last_checked_at?: string | null
           last_confidence?: string | null
@@ -333,6 +350,7 @@ export type Database = {
           monitoring_enabled?: boolean | null
           next_check_at?: string | null
           notes?: string | null
+          origin_iata?: string | null
           paid_total?: number
           rbd?: string | null
           return_date?: string | null

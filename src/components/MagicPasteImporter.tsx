@@ -2,32 +2,95 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { parseFromText, ParsedTrip } from "@/lib/import/parsers";
 import { Info, Sparkles } from "lucide-react";
 
 interface MagicPasteImporterProps {
   onImport: (data: ParsedTrip) => void;
 }
 
+type ParsedTrip = {
+  confirmation_code?: string;
+  airline?: string;
+  first_name?: string;
+  last_name?: string;
+  paid_total?: number;
+  currency?: string;
+  segments?: Array<{
+    carrier?: string;
+    flight_number?: string;
+    depart_airport?: string;
+    arrive_airport?: string;
+    depart_datetime?: string | null;
+    arrive_datetime?: string | null;
+  }>;
+  confidence: 'high' | 'medium' | 'low';
+  notes?: string;
+};
+
 export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
-  const [airline, setAirline] = useState<'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6' | ''>('');
   const [rawText, setRawText] = useState('');
   const [parsed, setParsed] = useState<ParsedTrip | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleParse = () => {
-    if (!airline || !rawText.trim()) return;
+  const handleParse = async () => {
+    if (!rawText.trim()) return;
     
-    const result = parseFromText(airline as 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6', rawText);
-    setParsed(result);
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-magic-paste`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ text: rawText, upsert: false }),
+      });
+
+      const data = await response.json();
+      
+      if (data.ok && data.trip) {
+        const mappedTrip: ParsedTrip = {
+          confirmation_code: data.trip.pnr,
+          airline: data.trip.airline_code,
+          first_name: data.trip.passenger_names?.[0]?.split(' ')[0],
+          last_name: data.trip.passenger_names?.[0]?.split(' ').slice(1).join(' '),
+          paid_total: data.trip.ticket_amount,
+          currency: data.trip.currency,
+          segments: data.trip.flight_numbers?.map((fn: string, idx: number) => ({
+            carrier: data.trip.airline_code || '',
+            flight_number: fn,
+            depart_airport: idx === 0 ? data.trip.origin_iata : data.trip.destination_iata,
+            arrive_airport: idx === 0 ? data.trip.destination_iata : data.trip.origin_iata,
+            depart_datetime: data.trip.departure_date,
+            arrive_datetime: null,
+          })) || [],
+          confidence: data.message ? 'low' : 'high',
+          notes: data.message || 'Successfully extracted flight details',
+        };
+        
+        setParsed(mappedTrip);
+      } else {
+        setParsed({
+          confidence: 'low',
+          notes: data.message || 'Could not extract flight details from the provided text.',
+        });
+      }
+    } catch (error) {
+      console.error('Parse error:', error);
+      setParsed({
+        confidence: 'low',
+        notes: 'Error parsing confirmation email. Please try again or enter details manually.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleApply = () => {
     if (parsed) {
       onImport(parsed);
-      // Reset
       setRawText('');
       setParsed(null);
     }
@@ -43,22 +106,6 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
         </p>
       </div>
 
-      <div>
-        <Label htmlFor="import-airline">Airline</Label>
-        <Select value={airline} onValueChange={(v) => setAirline(v as any)}>
-          <SelectTrigger id="import-airline">
-            <SelectValue placeholder="Select airline" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="AA">American Airlines</SelectItem>
-            <SelectItem value="DL">Delta Air Lines</SelectItem>
-            <SelectItem value="UA">United Airlines</SelectItem>
-            <SelectItem value="AS">Alaska Airlines</SelectItem>
-            <SelectItem value="WN">Southwest Airlines</SelectItem>
-            <SelectItem value="B6">JetBlue Airways</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
       <div>
         <Label htmlFor="import-text">Confirmation Text</Label>
@@ -74,11 +121,11 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
 
       <Button
         onClick={handleParse}
-        disabled={!airline || !rawText.trim()}
+        disabled={!rawText.trim() || isLoading}
         className="w-full"
       >
         <Sparkles className="w-4 h-4 mr-2" />
-        Parse Text
+        {isLoading ? 'Parsing...' : 'Parse Text'}
       </Button>
 
       {parsed && (
@@ -105,6 +152,12 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
                   <p className="font-medium">{parsed.confirmation_code}</p>
                 </div>
               )}
+              {parsed.airline && (
+                <div>
+                  <span className="text-muted-foreground">Airline:</span>
+                  <p className="font-medium">{parsed.airline}</p>
+                </div>
+              )}
               {parsed.last_name && (
                 <div>
                   <span className="text-muted-foreground">Last Name:</span>
@@ -117,16 +170,10 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
                   <p className="font-medium">{parsed.first_name}</p>
                 </div>
               )}
-              {parsed.brand && (
+              {parsed.paid_total && (
                 <div>
-                  <span className="text-muted-foreground">Fare Brand:</span>
-                  <p className="font-medium">{parsed.brand}</p>
-                </div>
-              )}
-              {parsed.ticket_number && (
-                <div>
-                  <span className="text-muted-foreground">Ticket #:</span>
-                  <p className="font-mono text-xs">{parsed.ticket_number}</p>
+                  <span className="text-muted-foreground">Total:</span>
+                  <p className="font-medium">${parsed.paid_total} {parsed.currency}</p>
                 </div>
               )}
             </div>

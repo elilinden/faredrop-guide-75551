@@ -5,6 +5,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function missingForPricing(trip: any) {
+  const miss: string[] = [];
+  if (!trip.origin_iata || !/^[A-Z]{3}$/.test(trip.origin_iata)) miss.push("origin_iata");
+  if (!trip.destination_iata || !/^[A-Z]{3}$/.test(trip.destination_iata)) miss.push("destination_iata");
+  if (!trip.departure_date || !/^\d{4}-\d{2}-\d{2}$/.test(trip.departure_date)) miss.push("departure_date");
+  return miss;
+}
+
 const AMADEUS_ENV = (Deno.env.get("AMADEUS_ENV") || "test") === "production" ? "production" : "test";
 const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com";
 
@@ -179,18 +187,24 @@ Deno.serve(async (req) => {
       throw new Error("Trip not found");
     }
 
-    // Validate trip has segments
-    if (!trip.segments || trip.segments.length === 0) {
-      return new Response(
-        JSON.stringify({
-          error: "No flight segments",
-          message: "Please add flight details in the Advanced section to enable price checking",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+    // Validate that trip has required pricing fields or segments
+    const miss = missingForPricing(trip);
+    if (miss.length) {
+      // If no direct fields, try segments fallback
+      if (!trip.segments || trip.segments.length === 0) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: "missing_segments",
+            missing: miss,
+            message: "Add flight segments (origin, destination, date) to enable price checks."
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
     }
 
     // Rate limit: max 1 manual check per 10 minutes

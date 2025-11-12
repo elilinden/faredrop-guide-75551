@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.price-nudge]
 verify_jwt = false
+
+[functions.parse-magic-paste]
+verify_jwt = false

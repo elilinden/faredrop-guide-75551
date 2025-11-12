@@ -12,6 +12,14 @@ const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
+function missingForPricing(trip: any) {
+  const miss: string[] = [];
+  if (!trip.origin_iata || !/^[A-Z]{3}$/.test(trip.origin_iata)) miss.push("origin_iata");
+  if (!trip.destination_iata || !/^[A-Z]{3}$/.test(trip.destination_iata)) miss.push("destination_iata");
+  if (!trip.departure_date || !/^\d{4}-\d{2}-\d{2}$/.test(trip.departure_date)) miss.push("departure_date");
+  return miss;
+}
+
 const manageTripLinks: Record<string, string> = {
   AA: 'https://www.aa.com/reservation/view/find-your-reservation',
   DL: 'https://www.delta.com/my-trips/trip-details',
@@ -258,6 +266,24 @@ async function sendPriceAlert(trip: any, diff: number, publicPrice: number) {
 
 async function checkTrip(trip: any, userPrefs: any) {
   console.log(`[checkTrip] Checking trip ${trip.id}`);
+
+  // Validate trip has required pricing fields
+  const miss = missingForPricing(trip);
+  if (miss.length) {
+    // If missing required fields but has segments, try to derive from segments
+    if (!trip.segments || trip.segments.length === 0) {
+      console.warn(`[checkTrip] Trip ${trip.id} missing required fields and has no segments: ${miss.join(', ')}`);
+      // Schedule next check anyway to avoid breaking the queue
+      const now = new Date();
+      const freqMinutes = computeCheckFrequency(trip.depart_date, userPrefs, trip.monitor_frequency_minutes);
+      const nextCheckAt = new Date(now.getTime() + freqMinutes * 60 * 1000);
+      await supabase.from('trips').update({ 
+        last_checked_at: now.toISOString(),
+        next_check_at: nextCheckAt.toISOString() 
+      }).eq('id', trip.id);
+      return;
+    }
+  }
 
   // Add jitter to avoid bursts
   await new Promise(resolve => setTimeout(resolve, Math.random() * 500));
