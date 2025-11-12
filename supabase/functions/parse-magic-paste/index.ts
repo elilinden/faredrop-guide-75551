@@ -229,10 +229,21 @@ serve(async (req) => {
   }
 
   try {
-    const { text, tripId, upsert } = await req.json();
+    const body = await req.json();
+    const { text } = body;
+    
+    // Input validation
     if (!text || typeof text !== "string") {
       return new Response(
         JSON.stringify({ ok: false, error: "Missing 'text' string" }), 
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    // Enforce 50KB maximum size
+    if (text.length > 51200) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Text input exceeds maximum size of 50KB" }), 
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -267,44 +278,9 @@ serve(async (req) => {
       );
     }
 
-    // Optional upsert into trips
-    let upserted = false;
-    let outTripId = tripId;
-    
-    if (upsert) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
-
-      const payload: Record<string, unknown> = {
-        confirmation_code: parsed.pnr ?? null,
-        airline: parsed.airline_code ?? null,
-        origin_iata: parsed.origin_iata!,
-        destination_iata: parsed.destination_iata!,
-        departure_date: parsed.departure_date!,
-        return_date: parsed.return_date ?? null,
-        paid_total: parsed.ticket_amount ?? null,
-        currency: parsed.currency ?? "USD",
-        flight_numbers: parsed.flight_numbers ?? [],
-        adults: parsed.adults ?? 1,
-        cabin: parsed.cabin ?? null,
-      };
-
-      if (tripId) {
-        const { error } = await supabase.from("trips").update(payload).eq("id", tripId);
-        if (error) throw error;
-        upserted = true;
-      } else {
-        const { data, error } = await supabase.from("trips").insert(payload).select("id").single();
-        if (error) throw error;
-        upserted = true;
-        outTripId = data.id;
-      }
-    }
-
+    // Return parsed data only - client code handles database operations
     return new Response(
-      JSON.stringify({ ok: true, trip: parsed, upserted, tripId: outTripId }), 
+      JSON.stringify({ ok: true, trip: parsed }), 
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
