@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GuidedRepriceWizard } from "@/components/GuidedRepriceWizard";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
+import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { Plane, Calendar, DollarSign, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
@@ -157,14 +158,18 @@ const TripDetail = () => {
           </div>
 
           {/* Right: Guided Reprice */}
-          <div className="lg:col-span-2">
-            <div className="mb-4">
-              <h2 className="text-2xl font-bold mb-1">Guided Reprice</h2>
-              <p className="text-sm text-muted-foreground">
-                Follow the steps to preview potential credit
-              </p>
+          <div className="lg:col-span-2 space-y-6">
+            <div>
+              <div className="mb-4">
+                <h2 className="text-2xl font-bold mb-1">Guided Reprice</h2>
+                <p className="text-sm text-muted-foreground">
+                  Follow the steps to preview potential credit
+                </p>
+              </div>
+              <GuidedRepriceWizard trip={trip} />
             </div>
-            <GuidedRepriceWizard trip={trip} />
+
+            <AirlineTipsBox airline={trip.airline as AirlineKey} brand={trip.brand} />
           </div>
         </div>
       </main>
