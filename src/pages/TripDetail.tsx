@@ -18,6 +18,7 @@ import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
 import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { DeleteTripDialog } from "@/components/DeleteTripDialog";
+import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
@@ -30,8 +31,10 @@ const TripDetail = () => {
   const [loading, setLoading] = useState(true);
   const [trip, setTrip] = useState<any>(null);
   const [segments, setSegments] = useState<any[]>([]);
+  const [priceChecks, setPriceChecks] = useState<any[]>([]);
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [monitorThreshold, setMonitorThreshold] = useState(20);
+  const [monitorFrequency, setMonitorFrequency] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCheckingNow, setIsCheckingNow] = useState(false);
@@ -68,6 +71,18 @@ const TripDetail = () => {
         setSegments(segmentsData || []);
         setMonitoringEnabled(tripData.monitoring_enabled ?? true);
         setMonitorThreshold(tripData.monitor_threshold ?? 20);
+        setMonitorFrequency(tripData.monitor_frequency_minutes);
+
+        // Fetch price checks
+        const { data: checksData, error: checksError } = await supabase
+          .from("price_checks")
+          .select("*")
+          .eq("trip_id", id)
+          .order("created_at", { ascending: true });
+
+        if (!checksError && checksData) {
+          setPriceChecks(checksData);
+        }
       } catch (error) {
         console.error("Error fetching trip:", error);
         navigate("/dashboard");
@@ -537,6 +552,8 @@ const TripDetail = () => {
             </div>
 
             <AirlineTipsBox airline={trip.airline as AirlineKey} brand={trip.brand} />
+
+            <PriceHistoryChart priceChecks={priceChecks} paidTotal={trip.paid_total} />
           </div>
         </div>
 

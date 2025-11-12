@@ -275,6 +275,7 @@ export type Database = {
           monitor_frequency_minutes: number | null
           monitor_threshold: number | null
           monitoring_enabled: boolean | null
+          next_check_at: string | null
           notes: string | null
           paid_total: number
           rbd: string | null
@@ -302,6 +303,7 @@ export type Database = {
           monitor_frequency_minutes?: number | null
           monitor_threshold?: number | null
           monitoring_enabled?: boolean | null
+          next_check_at?: string | null
           notes?: string | null
           paid_total: number
           rbd?: string | null
@@ -329,6 +331,7 @@ export type Database = {
           monitor_frequency_minutes?: number | null
           monitor_threshold?: number | null
           monitoring_enabled?: boolean | null
+          next_check_at?: string | null
           notes?: string | null
           paid_total?: number
           rbd?: string | null
@@ -346,6 +349,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_preferences: {
+        Row: {
+          created_at: string | null
+          digest_cadence: string | null
+          email_alerts_enabled: boolean | null
+          min_drop_threshold: number | null
+          monitor_frequency_minutes: number | null
+          monitor_mode: string | null
+          timezone: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          digest_cadence?: string | null
+          email_alerts_enabled?: boolean | null
+          min_drop_threshold?: number | null
+          monitor_frequency_minutes?: number | null
+          monitor_mode?: string | null
+          timezone?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          digest_cadence?: string | null
+          email_alerts_enabled?: boolean | null
+          min_drop_threshold?: number | null
+          monitor_frequency_minutes?: number | null
+          monitor_mode?: string | null
+          timezone?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

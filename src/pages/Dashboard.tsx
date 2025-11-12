@@ -3,7 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { TripCard } from "@/components/TripCard";
-import { Plane, Plus } from "lucide-react";
+import { DashboardInsights } from "@/components/DashboardInsights";
+import { Plane, Plus, Settings } from "lucide-react";
 import { type AirlineKey } from "@/lib/airlines";
 
 const Dashboard = () => {
@@ -11,6 +12,12 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
   const [segmentsMap, setSegmentsMap] = useState<Record<string, any[]>>({});
+  const [insights, setInsights] = useState({
+    tripsAddedThisWeek: 0,
+    activeMonitors: 0,
+    potentialSavings: 0,
+    avgPriceChange: 0,
+  });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -52,6 +59,51 @@ const Dashboard = () => {
           });
           setSegmentsMap(map);
         }
+
+        // Fetch insights data
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        // Trips added this week
+        const tripsAddedThisWeek = tripsData.filter(
+          t => new Date(t.created_at) >= oneWeekAgo
+        ).length;
+
+        // Active monitors
+        const activeMonitors = tripsData.filter(
+          t => t.monitoring_enabled !== false
+        ).length;
+
+        // Potential savings from price checks
+        const { data: priceChecks } = await supabase
+          .from("price_checks")
+          .select("diff_vs_paid")
+          .in("trip_id", tripIds)
+          .gte("created_at", thirtyDaysAgo.toISOString())
+          .gt("diff_vs_paid", 0);
+
+        const potentialSavings = priceChecks?.reduce((sum, check) => sum + (check.diff_vs_paid || 0), 0) || 0;
+
+        // Avg price change last 7 days
+        const { data: recentChecks } = await supabase
+          .from("price_checks")
+          .select("diff_vs_paid")
+          .in("trip_id", tripIds)
+          .gte("created_at", oneWeekAgo.toISOString());
+
+        const avgPriceChange = recentChecks && recentChecks.length > 0
+          ? recentChecks.reduce((sum, check) => sum + (check.diff_vs_paid || 0), 0) / recentChecks.length
+          : 0;
+
+        setInsights({
+          tripsAddedThisWeek,
+          activeMonitors,
+          potentialSavings,
+          avgPriceChange,
+        });
       }
 
       setLoading(false);
@@ -77,7 +129,14 @@ const Dashboard = () => {
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
           </div>
-          <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+          <div className="flex items-center gap-2">
+            <Link to="/settings">
+              <Button variant="outline" size="icon">
+                <Settings className="w-4 h-4" />
+              </Button>
+            </Link>
+            <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+          </div>
         </div>
       </header>
 
@@ -91,6 +150,15 @@ const Dashboard = () => {
             </Button>
           </Link>
         </div>
+
+        {trips.length > 0 && (
+          <DashboardInsights
+            tripsAddedThisWeek={insights.tripsAddedThisWeek}
+            activeMonitors={insights.activeMonitors}
+            potentialSavings={insights.potentialSavings}
+            avgPriceChange={insights.avgPriceChange}
+          />
+        )}
 
         {trips.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">

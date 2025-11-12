@@ -3,10 +3,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
-import { Calendar, DollarSign, ArrowRight, Bell, BellOff, Clock } from "lucide-react";
+import { PriceSparkline } from "@/components/PriceSparkline";
+import { Calendar, DollarSign, ArrowRight, Bell, BellOff, Clock, TrendingDown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { type AirlineKey } from "@/lib/airlines";
 import { format, formatDistanceToNow } from "date-fns";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TripCardProps {
   trip: {
@@ -29,6 +32,23 @@ interface TripCardProps {
 }
 
 export const TripCard = ({ trip, segments }: TripCardProps) => {
+  const [priceChecks, setPriceChecks] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPriceChecks = async () => {
+      const { data } = await supabase
+        .from("price_checks")
+        .select("observed_price, created_at")
+        .eq("trip_id", trip.id)
+        .order("created_at", { ascending: true })
+        .limit(10);
+
+      if (data) setPriceChecks(data);
+    };
+
+    fetchPriceChecks();
+  }, [trip.id]);
+
   const route = segments.length > 0
     ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
     : "Route not set yet";
@@ -86,17 +106,26 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
               <span>Checked {formatDistanceToNow(new Date(trip.last_checked_at), { addSuffix: true })}</span>
             </div>
             {trip.last_public_price && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Last price:</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">${trip.last_public_price.toFixed(2)}</span>
-                  {trip.last_public_price < trip.paid_total && (
-                    <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
-                      ↓ ${(trip.paid_total - trip.last_public_price).toFixed(2)}
-                    </Badge>
-                  )}
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Last price:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">${trip.last_public_price.toFixed(2)}</span>
+                    {trip.last_public_price < trip.paid_total && (
+                      <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        ${(trip.paid_total - trip.last_public_price).toFixed(2)}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
-              </div>
+                {priceChecks.length > 0 && (
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-muted-foreground">Price trend:</span>
+                    <PriceSparkline priceChecks={priceChecks} paidTotal={trip.paid_total} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

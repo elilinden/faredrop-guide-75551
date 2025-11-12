@@ -23,6 +23,28 @@ const airlineNames: Record<string, string> = {
   AS: 'Alaska Airlines',
 };
 
+function computeCheckFrequency(departDate: string | null, userPrefs: any, tripOverride: number | null): number {
+  // Use trip override if set
+  if (tripOverride) return tripOverride;
+  
+  // Use fixed mode if user prefers
+  if (userPrefs?.monitor_mode === 'fixed') {
+    return userPrefs.monitor_frequency_minutes || 180;
+  }
+  
+  // Auto mode: compute based on days to departure
+  if (!departDate) return 180; // Default 3h if no date
+  
+  const now = new Date();
+  const depart = new Date(departDate);
+  const daysUntil = Math.floor((depart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysUntil > 90) return 1440; // 24h
+  if (daysUntil > 30) return 360;  // 6h
+  if (daysUntil > 7) return 180;   // 3h
+  return 60; // 1h
+}
+
 async function fetchPublicFare(trip: any): Promise<{ price: number; confidence: string } | null> {
   // TODO: Wire real pricing provider (Amadeus/Skyscanner/Duffel)
   console.log(`[fetchPublicFare] Stub for trip ${trip.id}`);
@@ -112,7 +134,7 @@ async function sendPriceAlert(trip: any, diff: number, publicPrice: number) {
   }
 }
 
-async function checkTrip(trip: any) {
+async function checkTrip(trip: any, userPrefs: any) {
   console.log(`[checkTrip] Checking trip ${trip.id}`);
 
   // Add jitter to avoid bursts
@@ -138,9 +160,20 @@ async function checkTrip(trip: any) {
     }
   }
 
-  // Update last_checked_at regardless of result
+  const now = new Date();
+  
+  // Compute next check time
+  const freqMinutes = computeCheckFrequency(
+    trip.depart_date,
+    userPrefs,
+    trip.monitor_frequency_minutes
+  );
+  const nextCheckAt = new Date(now.getTime() + freqMinutes * 60 * 1000);
+
+  // Update last_checked_at and next_check_at regardless of result
   const updateData: any = {
-    last_checked_at: new Date().toISOString(),
+    last_checked_at: now.toISOString(),
+    next_check_at: nextCheckAt.toISOString(),
   };
 
   if (publicFare) {
@@ -158,14 +191,18 @@ async function checkTrip(trip: any) {
     });
 
     // Send email if drop >= threshold and no email sent in last 24h
-    const threshold = trip.monitor_threshold || 1.0;
+    const userThreshold = userPrefs?.min_drop_threshold || 10;
+    const tripThreshold = trip.monitor_threshold || 1.0;
+    const threshold = Math.max(userThreshold, tripThreshold);
+    
     const lastSignalAt = trip.last_signal_at ? new Date(trip.last_signal_at) : null;
-    const now = new Date();
     const hoursSinceLastSignal = lastSignalAt 
       ? (now.getTime() - lastSignalAt.getTime()) / (1000 * 60 * 60)
       : 999;
 
-    if (diff >= threshold && hoursSinceLastSignal >= 24) {
+    const emailEnabled = userPrefs?.email_alerts_enabled !== false;
+
+    if (emailEnabled && diff >= threshold && hoursSinceLastSignal >= 24) {
       await sendPriceAlert(trip, diff, publicFare.price);
       updateData.last_signal_at = now.toISOString();
     }
@@ -197,6 +234,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Get unique user IDs and fetch their preferences
+    const userIds = [...new Set(trips.map(t => t.user_id))];
+    const { data: prefsData } = await supabase
+      .from('user_preferences')
+      .select('*')
+      .in('user_id', userIds);
+    
+    const prefsMap = new Map(prefsData?.map(p => [p.user_id, p]) || []);
+
     // Filter trips that need checking (skip if checked recently)
     const now = new Date();
     const tripsToCheck = trips.filter(trip => {
@@ -204,7 +250,9 @@ Deno.serve(async (req) => {
       
       const lastChecked = new Date(trip.last_checked_at);
       const minutesSinceCheck = (now.getTime() - lastChecked.getTime()) / (1000 * 60);
-      const frequency = trip.monitor_frequency_minutes || 180;
+      
+      const userPrefs = prefsMap.get(trip.user_id);
+      const frequency = computeCheckFrequency(trip.depart_date, userPrefs, trip.monitor_frequency_minutes);
       
       // Grace period of 5 minutes to prevent overlap
       return minutesSinceCheck >= (frequency - 5);
@@ -216,9 +264,12 @@ Deno.serve(async (req) => {
     const batchSize = 5;
     for (let i = 0; i < tripsToCheck.length; i += batchSize) {
       const batch = tripsToCheck.slice(i, i + batchSize);
-      await Promise.all(batch.map(trip => checkTrip(trip).catch(err => {
-        console.error(`[price-watch] Error checking trip ${trip.id}:`, err);
-      })));
+      await Promise.all(batch.map(trip => {
+        const userPrefs = prefsMap.get(trip.user_id);
+        return checkTrip(trip, userPrefs).catch(err => {
+          console.error(`[price-watch] Error checking trip ${trip.id}:`, err);
+        });
+      }));
     }
 
     return new Response(JSON.stringify({ checked: tripsToCheck.length }), {
