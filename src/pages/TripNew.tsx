@@ -321,9 +321,11 @@ const TripNew = () => {
             seg.flight_number &&
             seg.depart_airport &&
             seg.arrive_airport &&
-            seg.depart_datetime &&
-            seg.arrive_datetime
+            seg.depart_datetime
+            // arrive_datetime is optional - not always available from confirmations
         );
+
+        console.log('[TripNew] Filtered valid segments:', validSegments.length, 'out of', segments.length);
 
         if (validSegments.length > 0) {
           const { error: segmentsError } = await supabase.from("segments").insert(
@@ -334,11 +336,18 @@ const TripNew = () => {
               depart_airport: seg.depart_airport!.toUpperCase(),
               arrive_airport: seg.arrive_airport!.toUpperCase(),
               depart_datetime: seg.depart_datetime!,
-              arrive_datetime: seg.arrive_datetime!,
+              arrive_datetime: seg.arrive_datetime || seg.depart_datetime!, // Use depart if arrive not provided
             }))
           );
 
-          if (segmentsError) throw segmentsError;
+          if (segmentsError) {
+            console.error('[TripNew] Segments insert error:', segmentsError);
+            throw segmentsError;
+          }
+          
+          console.log('[TripNew] Successfully inserted', validSegments.length, 'segments');
+        } else {
+          console.warn('[TripNew] No valid segments to insert');
         }
       }
 
