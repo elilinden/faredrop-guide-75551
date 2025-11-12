@@ -10,6 +10,7 @@ function missingForPricing(trip: any) {
   if (!trip.origin_iata || !/^[A-Z]{3}$/.test(trip.origin_iata)) miss.push("origin_iata");
   if (!trip.destination_iata || !/^[A-Z]{3}$/.test(trip.destination_iata)) miss.push("destination_iata");
   if (!trip.departure_date || !/^\d{4}-\d{2}-\d{2}$/.test(trip.departure_date)) miss.push("departure_date");
+  // return_date is optional - one-way trips are valid
   return miss;
 }
 
@@ -130,15 +131,17 @@ async function fetchPublicFare(
   const { origin, destination, departureDate, returnDate, adults, cabin } = mapTripToSearchParams(trip);
 
   if (!origin || !destination || !departureDate) {
-    console.error("[fetchPublicFare] Missing required fields:", {
+    console.error("[fetchPublicFare] Missing required fields after mapping:", {
       trip_id: trip?.id,
       origin,
       destination,
       departureDate,
+      returnDate,
       trip_data: {
         origin_iata: trip.origin_iata,
         destination_iata: trip.destination_iata,
         departure_date: trip.departure_date,
+        return_date: trip.return_date,
         segments: trip.segments?.length || 0
       }
     });
@@ -252,24 +255,21 @@ Deno.serve(async (req) => {
       throw new Error("Trip not found");
     }
 
-    // Validate that trip has required pricing fields or segments
+    // Validate that trip has required pricing fields (origin, destination, departure_date)
     const miss = missingForPricing(trip);
     if (miss.length) {
-      // If no direct fields, try segments fallback
-      if (!trip.segments || trip.segments.length === 0) {
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            error: "missing_segments",
-            missing: miss,
-            message: "Add flight segments (origin, destination, date) to enable price checks."
-          }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" } 
-          }
-        );
-      }
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: "missing_required_fields",
+          missing: miss,
+          message: `Cannot check prices: missing ${miss.join(", ")}. Please add these flight details.`
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
     }
 
     // Rate limit: max 1 manual check per 2 minutes
