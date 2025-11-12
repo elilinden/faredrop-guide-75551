@@ -20,12 +20,12 @@ import type { ParsedTrip } from "@/lib/import/parsers";
 import { logAudit } from "@/lib/audit";
 
 const segmentSchema = z.object({
-  carrier: z.string().optional(),
-  flight_number: z.string().regex(/^[0-9]{1,4}[A-Z]?$/, "Format: 123 or 1234A").optional().or(z.literal("")),
-  depart_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code").optional().or(z.literal("")),
-  arrive_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code").optional().or(z.literal("")),
-  depart_datetime: z.string().optional().or(z.literal("")),
-  arrive_datetime: z.string().optional().or(z.literal("")),
+  carrier: z.string().min(2, "2-letter carrier code required").max(2, "2 letters only").toUpperCase(),
+  flight_number: z.string().regex(/^[0-9]{1,4}[A-Z]?$/, "Format: 123 or 1234A").min(1, "Flight number required"),
+  depart_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code required").length(3, "3 letters required"),
+  arrive_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code required").length(3, "3 letters required"),
+  depart_datetime: z.string().min(1, "Departure time required"),
+  arrive_datetime: z.string().min(1, "Arrival time required"),
 });
 
 const baseTripFormSchema = z.object({
@@ -47,11 +47,11 @@ const baseTripFormSchema = z.object({
     .optional()
     .or(z.literal("")),
   paid_total: z.coerce.number().min(0, "Must be 0 or greater"),
+  segments: z.array(segmentSchema).min(1, "At least one flight segment required for price checking"),
   brand: z.string().optional(),
   ticket_number: z.string().regex(/^[0-9]{13}$/, "13 digits").optional().or(z.literal("")),
   rbd: z.string().regex(/^[A-Z]$/, "Single letter").optional().or(z.literal("")),
   notes: z.string().optional(),
-  segments: z.array(segmentSchema).optional(),
 });
 
 const tripFormSchema = baseTripFormSchema.refine(
@@ -66,7 +66,9 @@ const TripNew = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([]);
+  const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([
+    { carrier: "", flight_number: "", depart_airport: "", arrive_airport: "", depart_datetime: "", arrive_datetime: "" }
+  ]);
   const [duplicateTrip, setDuplicateTrip] = useState<{ id: string; airline: string; pnr: string } | null>(null);
 
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<TripFormData>({
@@ -416,12 +418,123 @@ const TripNew = () => {
             </CardContent>
           </Card>
 
+          {/* Flight Segments Section - Required for Price Checking */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Flight Details</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Required for automatic price monitoring and alerts
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base">Flight Segments</Label>
+                <Button type="button" variant="outline" size="sm" onClick={addSegment}>
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Segment
+                </Button>
+              </div>
+              {errors.segments?.message && (
+                <p className="text-sm text-destructive">{errors.segments.message}</p>
+              )}
+              <div className="space-y-4">
+                {segments.map((seg, idx) => (
+                  <Card key={idx} className="border-2">
+                    <CardContent className="pt-4 space-y-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">Segment {idx + 1}</span>
+                        {segments.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeSegment(idx)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs">Carrier *</Label>
+                          <Input
+                            value={seg.carrier}
+                            onChange={(e) =>
+                              updateSegment(idx, "carrier", e.target.value.toUpperCase())
+                            }
+                            placeholder="DL"
+                            maxLength={2}
+                            className="uppercase"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Flight # *</Label>
+                          <Input
+                            value={seg.flight_number}
+                            onChange={(e) => updateSegment(idx, "flight_number", e.target.value)}
+                            placeholder="1234"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">From *</Label>
+                          <Input
+                            value={seg.depart_airport}
+                            onChange={(e) =>
+                              updateSegment(idx, "depart_airport", e.target.value.toUpperCase())
+                            }
+                            placeholder="JFK"
+                            maxLength={3}
+                            className="uppercase"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">To *</Label>
+                          <Input
+                            value={seg.arrive_airport}
+                            onChange={(e) =>
+                              updateSegment(idx, "arrive_airport", e.target.value.toUpperCase())
+                            }
+                            placeholder="LAX"
+                            maxLength={3}
+                            className="uppercase"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Depart *</Label>
+                          <Input
+                            type="datetime-local"
+                            value={seg.depart_datetime}
+                            onChange={(e) => updateSegment(idx, "depart_datetime", e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Arrive *</Label>
+                          <Input
+                            type="datetime-local"
+                            value={seg.arrive_datetime}
+                            onChange={(e) => updateSegment(idx, "arrive_datetime", e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
             <Card>
               <CollapsibleTrigger className="w-full">
                 <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Advanced (optional)</CardTitle>
+                    <CardTitle className="text-base">Additional Details (optional)</CardTitle>
                     <ChevronDown
                       className={`w-5 h-5 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
                     />
@@ -494,97 +607,6 @@ const TripNew = () => {
                         <Textarea {...field} id="notes" placeholder="Any additional notes..." rows={3} />
                       )}
                     />
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <Label>Flight Segments</Label>
-                      <Button type="button" variant="outline" size="sm" onClick={addSegment}>
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add Segment
-                      </Button>
-                    </div>
-                    <div className="space-y-4">
-                      {segments.map((seg, idx) => (
-                        <Card key={idx}>
-                          <CardContent className="pt-4 space-y-3">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm font-medium">Segment {idx + 1}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => removeSegment(idx)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <Label className="text-xs">Carrier</Label>
-                                <Input
-                                  value={seg.carrier}
-                                  onChange={(e) =>
-                                    updateSegment(idx, "carrier", e.target.value.toUpperCase())
-                                  }
-                                  placeholder="AA"
-                                  maxLength={2}
-                                  className="uppercase"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">Flight #</Label>
-                                <Input
-                                  value={seg.flight_number}
-                                  onChange={(e) => updateSegment(idx, "flight_number", e.target.value)}
-                                  placeholder="123"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">From</Label>
-                                <Input
-                                  value={seg.depart_airport}
-                                  onChange={(e) =>
-                                    updateSegment(idx, "depart_airport", e.target.value.toUpperCase())
-                                  }
-                                  placeholder="JFK"
-                                  maxLength={3}
-                                  className="uppercase"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">To</Label>
-                                <Input
-                                  value={seg.arrive_airport}
-                                  onChange={(e) =>
-                                    updateSegment(idx, "arrive_airport", e.target.value.toUpperCase())
-                                  }
-                                  placeholder="LAX"
-                                  maxLength={3}
-                                  className="uppercase"
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">Depart</Label>
-                                <Input
-                                  type="datetime-local"
-                                  value={seg.depart_datetime}
-                                  onChange={(e) => updateSegment(idx, "depart_datetime", e.target.value)}
-                                />
-                              </div>
-                              <div>
-                                <Label className="text-xs">Arrive</Label>
-                                <Input
-                                  type="datetime-local"
-                                  value={seg.arrive_datetime}
-                                  onChange={(e) => updateSegment(idx, "arrive_datetime", e.target.value)}
-                                />
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
                   </div>
                 </CardContent>
               </CollapsibleContent>
