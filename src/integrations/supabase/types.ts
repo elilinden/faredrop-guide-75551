@@ -14,7 +14,375 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alerts: {
+        Row: {
+          created_at: string
+          id: string
+          threshold: number
+          trip_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          threshold?: number
+          trip_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          threshold?: number
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          trip_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          trip_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          trip_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_checks: {
+        Row: {
+          confidence: string | null
+          created_at: string | null
+          diff_vs_paid: number | null
+          id: string
+          observed_price: number | null
+          trip_id: string | null
+        }
+        Insert: {
+          confidence?: string | null
+          created_at?: string | null
+          diff_vs_paid?: number | null
+          id?: string
+          observed_price?: number | null
+          trip_id?: string | null
+        }
+        Update: {
+          confidence?: string | null
+          created_at?: string | null
+          diff_vs_paid?: number | null
+          id?: string
+          observed_price?: number | null
+          trip_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_checks_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_signals: {
+        Row: {
+          confidence: string | null
+          created_at: string | null
+          diff_vs_paid: number
+          id: string
+          observed_price: number
+          trip_id: string | null
+        }
+        Insert: {
+          confidence?: string | null
+          created_at?: string | null
+          diff_vs_paid: number
+          id?: string
+          observed_price: number
+          trip_id?: string | null
+        }
+        Update: {
+          confidence?: string | null
+          created_at?: string | null
+          diff_vs_paid?: number
+          id?: string
+          observed_price?: number
+          trip_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_signals_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
+      reprices: {
+        Row: {
+          confirmed_credit: number | null
+          created_at: string
+          evidence_url: string | null
+          id: string
+          method: string
+          preview_credit: number
+          trip_id: string
+        }
+        Insert: {
+          confirmed_credit?: number | null
+          created_at?: string
+          evidence_url?: string | null
+          id?: string
+          method: string
+          preview_credit: number
+          trip_id: string
+        }
+        Update: {
+          confirmed_credit?: number | null
+          created_at?: string
+          evidence_url?: string | null
+          id?: string
+          method?: string
+          preview_credit?: number
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reprices_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      segments: {
+        Row: {
+          arrive_airport: string
+          arrive_datetime: string
+          carrier: string
+          created_at: string
+          depart_airport: string
+          depart_datetime: string
+          flight_number: string
+          id: string
+          trip_id: string
+        }
+        Insert: {
+          arrive_airport: string
+          arrive_datetime: string
+          carrier: string
+          created_at?: string
+          depart_airport: string
+          depart_datetime: string
+          flight_number: string
+          id?: string
+          trip_id: string
+        }
+        Update: {
+          arrive_airport?: string
+          arrive_datetime?: string
+          carrier?: string
+          created_at?: string
+          depart_airport?: string
+          depart_datetime?: string
+          flight_number?: string
+          id?: string
+          trip_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "segments_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trips: {
+        Row: {
+          airline: string
+          brand: string | null
+          confirmation_code: string
+          created_at: string
+          currency: string
+          deleted_at: string | null
+          depart_date: string | null
+          first_name: string | null
+          id: string
+          last_checked_at: string | null
+          last_confidence: string | null
+          last_name: string
+          last_public_price: number | null
+          last_signal_at: string | null
+          last_signal_price: number | null
+          monitor_frequency_minutes: number | null
+          monitor_threshold: number | null
+          monitoring_enabled: boolean | null
+          next_check_at: string | null
+          notes: string | null
+          paid_total: number
+          rbd: string | null
+          return_date: string | null
+          status: string
+          ticket_number: string | null
+          user_id: string
+        }
+        Insert: {
+          airline: string
+          brand?: string | null
+          confirmation_code: string
+          created_at?: string
+          currency?: string
+          deleted_at?: string | null
+          depart_date?: string | null
+          first_name?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_confidence?: string | null
+          last_name: string
+          last_public_price?: number | null
+          last_signal_at?: string | null
+          last_signal_price?: number | null
+          monitor_frequency_minutes?: number | null
+          monitor_threshold?: number | null
+          monitoring_enabled?: boolean | null
+          next_check_at?: string | null
+          notes?: string | null
+          paid_total: number
+          rbd?: string | null
+          return_date?: string | null
+          status?: string
+          ticket_number?: string | null
+          user_id: string
+        }
+        Update: {
+          airline?: string
+          brand?: string | null
+          confirmation_code?: string
+          created_at?: string
+          currency?: string
+          deleted_at?: string | null
+          depart_date?: string | null
+          first_name?: string | null
+          id?: string
+          last_checked_at?: string | null
+          last_confidence?: string | null
+          last_name?: string
+          last_public_price?: number | null
+          last_signal_at?: string | null
+          last_signal_price?: number | null
+          monitor_frequency_minutes?: number | null
+          monitor_threshold?: number | null
+          monitoring_enabled?: boolean | null
+          next_check_at?: string | null
+          notes?: string | null
+          paid_total?: number
+          rbd?: string | null
+          return_date?: string | null
+          status?: string
+          ticket_number?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trips_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_preferences: {
+        Row: {
+          created_at: string | null
+          digest_cadence: string | null
+          email_alerts_enabled: boolean | null
+          min_drop_threshold: number | null
+          monitor_frequency_minutes: number | null
+          monitor_mode: string | null
+          timezone: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          digest_cadence?: string | null
+          email_alerts_enabled?: boolean | null
+          min_drop_threshold?: number | null
+          monitor_frequency_minutes?: number | null
+          monitor_mode?: string | null
+          timezone?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          digest_cadence?: string | null
+          email_alerts_enabled?: boolean | null
+          min_drop_threshold?: number | null
+          monitor_frequency_minutes?: number | null
+          monitor_mode?: string | null
+          timezone?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
