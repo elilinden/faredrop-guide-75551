@@ -1,10 +1,12 @@
 export type ParsedTrip = {
+  airline?: 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6';
   confirmation_code?: string;
   first_name?: string;
   last_name?: string;
   paid_total?: number;
   brand?: string;
   ticket_number?: string;
+  currency?: string;
   segments?: {
     carrier?: 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6';
     flight_number?: string;

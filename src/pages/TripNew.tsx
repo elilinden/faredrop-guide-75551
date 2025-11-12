@@ -160,7 +160,10 @@ const TripNew = () => {
   };
 
   const handleImport = (parsed: ParsedTrip) => {
+    console.log('[handleImport] Received parsed data:', parsed);
+    
     // Fill form with parsed data
+    if (parsed.airline) setValue("airline", parsed.airline);
     if (parsed.confirmation_code) setValue("confirmation_code", parsed.confirmation_code);
     if (parsed.first_name) setValue("first_name", parsed.first_name);
     if (parsed.last_name) setValue("last_name", parsed.last_name);
@@ -169,11 +172,33 @@ const TripNew = () => {
     if (parsed.ticket_number) setValue("ticket_number", parsed.ticket_number);
     if (parsed.notes) setValue("notes", parsed.notes);
 
-    // Fill segments
+    // Fill segments - ensure proper datetime format
     if (parsed.segments && parsed.segments.length > 0) {
-      setSegments(parsed.segments as any);
+      const formattedSegments = parsed.segments.map(seg => ({
+        carrier: seg.carrier || '',
+        flight_number: seg.flight_number || '',
+        depart_airport: seg.depart_airport || '',
+        arrive_airport: seg.arrive_airport || '',
+        // Ensure datetime format for datetime-local input (YYYY-MM-DDTHH:MM)
+        depart_datetime: seg.depart_datetime?.includes('T') 
+          ? seg.depart_datetime.slice(0, 16) // Keep YYYY-MM-DDTHH:MM
+          : seg.depart_datetime 
+            ? `${seg.depart_datetime}T12:00` // Add default time if only date
+            : '',
+        arrive_datetime: seg.arrive_datetime?.includes('T')
+          ? seg.arrive_datetime.slice(0, 16)
+          : seg.arrive_datetime
+            ? `${seg.arrive_datetime}T14:00` // Add default time if only date
+            : '',
+      }));
+      
+      console.log('[handleImport] Formatted segments:', formattedSegments);
+      setSegments(formattedSegments);
       setAdvancedOpen(true);
     }
+
+    // Switch to manual tab to show imported data
+    setActiveTab('form');
 
     toast({
       title: "Data imported",
