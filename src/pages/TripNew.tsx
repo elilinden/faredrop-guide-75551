@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Plane, ChevronDown, Plus, Trash2, Info } from "lucide-react";
+import { Plane, ChevronDown, Plus, Trash2, Info, AlertCircle } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BRAND_OPTIONS } from "@/lib/airlines";
+import { MagicPasteImporter } from "@/components/MagicPasteImporter";
+import type { ParsedTrip } from "@/lib/import/parsers";
+import { logAudit } from "@/lib/audit";
 
 const segmentSchema = z.object({
   carrier: z.string().optional(),
@@ -26,9 +30,22 @@ const segmentSchema = z.object({
 
 const baseTripFormSchema = z.object({
   airline: z.enum(["AA", "DL", "UA", "AS"], { required_error: "Select an airline" }),
-  confirmation_code: z.string().regex(/^[A-Z0-9]{6}$/, "6 letters/numbers required"),
-  last_name: z.string().min(1, "Last name required"),
-  first_name: z.string().optional(),
+  confirmation_code: z
+    .string()
+    .trim()
+    .transform(s => s.toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9]{6}$/, "6 letters/numbers required")),
+  last_name: z
+    .string()
+    .trim()
+    .regex(/^[\p{L} \-''.]{1,40}$/u, "Invalid name format")
+    .min(1, "Last name required"),
+  first_name: z
+    .string()
+    .trim()
+    .regex(/^[\p{L} \-''.]{1,40}$/u, "Invalid name format")
+    .optional()
+    .or(z.literal("")),
   paid_total: z.coerce.number().min(0, "Must be 0 or greater"),
   brand: z.string().optional(),
   ticket_number: z.string().regex(/^[0-9]{13}$/, "13 digits").optional().or(z.literal("")),
@@ -38,7 +55,7 @@ const baseTripFormSchema = z.object({
 });
 
 const tripFormSchema = baseTripFormSchema.refine(
-  (v) => !(v.airline === "AA" || v.airline === "DL") || !!v.first_name,
+  (v) => !(v.airline === "AA" || v.airline === "DL") || (!!v.first_name && v.first_name.length > 0),
   { path: ["first_name"], message: "First name required for this airline" }
 );
 
@@ -50,8 +67,9 @@ const TripNew = () => {
   const [loading, setLoading] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([]);
+  const [duplicateTrip, setDuplicateTrip] = useState<{ id: string; airline: string; pnr: string } | null>(null);
 
-  const { control, handleSubmit, watch, formState: { errors } } = useForm<TripFormData>({
+  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<TripFormData>({
     resolver: zodResolver(tripFormSchema),
     defaultValues: {
       airline: undefined,
@@ -67,6 +85,45 @@ const TripNew = () => {
   });
 
   const selectedAirline = watch("airline");
+  const watchedPNR = watch("confirmation_code");
+  const watchedLastName = watch("last_name");
+
+  // Check for duplicates
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      if (!selectedAirline || !watchedPNR || watchedPNR.length !== 6 || !watchedLastName) {
+        setDuplicateTrip(null);
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("trips")
+        .select("id, airline, confirmation_code")
+        .eq("user_id", user.id)
+        .eq("airline", selectedAirline)
+        .eq("confirmation_code", watchedPNR.toUpperCase())
+        .eq("last_name", watchedLastName)
+        .is("deleted_at", null)
+        .limit(1)
+        .single();
+
+      if (data) {
+        setDuplicateTrip({
+          id: data.id,
+          airline: data.airline,
+          pnr: data.confirmation_code,
+        });
+      } else {
+        setDuplicateTrip(null);
+      }
+    };
+
+    const timer = setTimeout(checkDuplicate, 500);
+    return () => clearTimeout(timer);
+  }, [selectedAirline, watchedPNR, watchedLastName]);
 
   const addSegment = () => {
     setSegments([
@@ -90,6 +147,28 @@ const TripNew = () => {
     const updated = [...segments];
     updated[index] = { ...updated[index], [field]: value };
     setSegments(updated);
+  };
+
+  const handleImport = (parsed: ParsedTrip) => {
+    // Fill form with parsed data
+    if (parsed.confirmation_code) setValue("confirmation_code", parsed.confirmation_code);
+    if (parsed.first_name) setValue("first_name", parsed.first_name);
+    if (parsed.last_name) setValue("last_name", parsed.last_name);
+    if (parsed.paid_total) setValue("paid_total", parsed.paid_total);
+    if (parsed.brand) setValue("brand", parsed.brand);
+    if (parsed.ticket_number) setValue("ticket_number", parsed.ticket_number);
+    if (parsed.notes) setValue("notes", parsed.notes);
+
+    // Fill segments
+    if (parsed.segments && parsed.segments.length > 0) {
+      setSegments(parsed.segments as any);
+      setAdvancedOpen(true);
+    }
+
+    toast({
+      title: "Data imported",
+      description: `Imported with ${parsed.confidence} confidence. Review and save when ready.`,
+    });
   };
 
   const onSubmit = async (data: TripFormData) => {
@@ -159,6 +238,12 @@ const TripNew = () => {
         }
       }
 
+      // Log audit
+      await logAudit("create", tripData.id, {
+        airline: tripData.airline,
+        pnr: tripData.confirmation_code,
+      });
+
       toast({
         title: "Trip saved!",
         description: "Open Guided Reprice to preview credit.",
@@ -195,7 +280,14 @@ const TripNew = () => {
           We only need what the airline requires to preview your credit.
         </p>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <Tabs defaultValue="form" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="form">Manual Entry</TabsTrigger>
+            <TabsTrigger value="import">Import from Confirmation</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="form">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Required Info</CardTitle>
@@ -243,6 +335,25 @@ const TripNew = () => {
                 />
                 {errors.confirmation_code && (
                   <p className="text-sm text-destructive mt-1">{errors.confirmation_code.message}</p>
+                )}
+                {duplicateTrip && (
+                  <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-500 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                        Looks like you already added this trip.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="link"
+                        size="sm"
+                        className="p-0 h-auto text-yellow-700 dark:text-yellow-300"
+                        onClick={() => navigate(`/trips/${duplicateTrip.id}`)}
+                      >
+                        Go to trip →
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -486,7 +597,13 @@ const TripNew = () => {
               {loading ? "Saving..." : "Save Trip"}
             </Button>
           </div>
-        </form>
+            </form>
+          </TabsContent>
+
+          <TabsContent value="import">
+            <MagicPasteImporter onImport={handleImport} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

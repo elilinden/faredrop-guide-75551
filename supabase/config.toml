@@ -2,3 +2,6 @@ project_id = "dhdbxwldlyslbmkngbme"
 
 [functions.price-nudge]
 verify_jwt = false
+
+[functions.purge-deleted-trips]
+verify_jwt = false

@@ -20,11 +20,12 @@ const Dashboard = () => {
         return;
       }
 
-      // Fetch trips
+      // Fetch trips (excluding soft-deleted)
       const { data: tripsData, error: tripsError } = await supabase
         .from("trips")
         .select("*")
         .eq("user_id", session.user.id)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
       if (tripsError) {

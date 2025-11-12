@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,14 +6,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { GuidedRepriceWizard } from "@/components/GuidedRepriceWizard";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { EligibilityPill } from "@/components/EligibilityPill";
 import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
-import { Plane, Calendar, DollarSign, ArrowLeft } from "lucide-react";
+import { DeleteTripDialog } from "@/components/DeleteTripDialog";
+import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
+import { logAudit } from "@/lib/audit";
 
 const TripDetail = () => {
   const { id } = useParams();
@@ -23,6 +31,9 @@ const TripDetail = () => {
   const [segments, setSegments] = useState<any[]>([]);
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [monitorThreshold, setMonitorThreshold] = useState(20);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchTrip = async () => {
@@ -133,6 +144,91 @@ const TripDetail = () => {
     }
   };
 
+  const handleDelete = async () => {
+    setDeleteDialogOpen(false);
+    setIsDeleting(true);
+
+    try {
+      // Soft delete
+      const { error } = await supabase
+        .from("trips")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", trip.id);
+
+      if (error) throw error;
+
+      // Log audit
+      await logAudit("delete", trip.id, {
+        airline: trip.airline,
+        pnr: trip.confirmation_code,
+      });
+
+      // Show undo toast
+      const { dismiss } = toast({
+        title: "Trip deleted",
+        description: "You can undo this for 10 seconds",
+        action: (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              handleUndo();
+              dismiss();
+            }}
+          >
+            Undo
+          </Button>
+        ),
+      });
+
+      // Set timer to redirect after 10 seconds
+      undoTimerRef.current = setTimeout(() => {
+        navigate("/dashboard");
+      }, 10000);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to delete",
+        description: error.message,
+      });
+      setIsDeleting(false);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .update({ deleted_at: null })
+        .eq("id", trip.id);
+
+      if (error) throw error;
+
+      // Log audit
+      await logAudit("undo", trip.id, {
+        airline: trip.airline,
+        pnr: trip.confirmation_code,
+      });
+
+      setIsDeleting(false);
+      toast({
+        title: "Deletion cancelled",
+        description: "Your trip has been restored",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to undo",
+        description: error.message,
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
@@ -145,12 +241,31 @@ const TripDetail = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <Link to="/dashboard">
-          <Button variant="ghost" size="sm" className="mb-4">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to trips
-          </Button>
-        </Link>
+        <div className="flex items-center justify-between mb-4">
+          <Link to="/dashboard">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to trips
+            </Button>
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => setDeleteDialogOpen(true)}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete trip
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left: Trip Summary */}
@@ -278,6 +393,14 @@ const TripDetail = () => {
             <AirlineTipsBox airline={trip.airline as AirlineKey} brand={trip.brand} />
           </div>
         </div>
+
+        <DeleteTripDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onConfirm={handleDelete}
+          airline={trip.airline}
+          confirmationCode={trip.confirmation_code}
+        />
       </main>
     </div>
   );
