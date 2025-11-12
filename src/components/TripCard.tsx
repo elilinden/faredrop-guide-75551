@@ -14,7 +14,7 @@ interface TripCardProps {
     confirmation_code: string;
     brand: string | null;
     paid_total: number;
-    depart_date: string;
+    depart_date: string | null;
     return_date: string | null;
   };
   segments: Array<{
@@ -26,7 +26,11 @@ interface TripCardProps {
 export const TripCard = ({ trip, segments }: TripCardProps) => {
   const route = segments.length > 0
     ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
-    : "Route details";
+    : "Route not set yet";
+
+  const dateDisplay = trip.depart_date
+    ? `${format(new Date(trip.depart_date), "MMM d")}${trip.return_date ? ` - ${format(new Date(trip.return_date), "MMM d")}` : ""}`
+    : "Date TBD";
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -39,22 +43,22 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
                 {trip.confirmation_code}
               </span>
             </div>
-            <h3 className="text-lg font-semibold mb-1">{route}</h3>
+            <h3 className="text-lg font-semibold mb-1">
+              {trip.airline} · {trip.confirmation_code}
+            </h3>
+            <p className="text-sm text-muted-foreground">{route}</p>
           </div>
-          <EligibilityPill brand={trip.brand} />
+          {trip.brand && <EligibilityPill brand={trip.brand} />}
         </div>
 
         <div className="flex flex-wrap gap-4 mb-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4" />
-            <span>
-              {format(new Date(trip.depart_date), "MMM d")}
-              {trip.return_date && ` - ${format(new Date(trip.return_date), "MMM d")}`}
-            </span>
+            <span>{dateDisplay}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <DollarSign className="w-4 h-4" />
-            <span>${trip.paid_total.toFixed(2)}</span>
+            <span>Paid ${trip.paid_total.toFixed(2)}</span>
           </div>
         </div>
 

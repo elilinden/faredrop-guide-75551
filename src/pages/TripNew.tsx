@@ -2,53 +2,70 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/hooks/use-toast";
-import { Plane, Plus, Trash2 } from "lucide-react";
-import { BRAND_OPTIONS, type AirlineKey } from "@/lib/airlines";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useToast } from "@/hooks/use-toast";
+import { Plane, ChevronDown, Plus, Trash2, Info } from "lucide-react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { BRAND_OPTIONS } from "@/lib/airlines";
 
-interface Segment {
-  carrier: AirlineKey;
-  flight_number: string;
-  depart_airport: string;
-  arrive_airport: string;
-  depart_datetime: string;
-  arrive_datetime: string;
-}
+const segmentSchema = z.object({
+  carrier: z.string().optional(),
+  flight_number: z.string().regex(/^[0-9]{1,4}[A-Z]?$/, "Format: 123 or 1234A").optional().or(z.literal("")),
+  depart_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code").optional().or(z.literal("")),
+  arrive_airport: z.string().regex(/^[A-Z]{3}$/, "3-letter code").optional().or(z.literal("")),
+  depart_datetime: z.string().optional().or(z.literal("")),
+  arrive_datetime: z.string().optional().or(z.literal("")),
+});
+
+const tripFormSchema = z.object({
+  airline: z.enum(["AA", "DL", "UA", "AS"], { required_error: "Select an airline" }),
+  confirmation_code: z.string().regex(/^[A-Z0-9]{6}$/, "6 letters/numbers required"),
+  last_name: z.string().min(1, "Last name required"),
+  paid_total: z.coerce.number().min(0, "Must be 0 or greater"),
+  brand: z.string().optional(),
+  ticket_number: z.string().regex(/^[0-9]{13}$/, "13 digits").optional().or(z.literal("")),
+  rbd: z.string().regex(/^[A-Z]$/, "Single letter").optional().or(z.literal("")),
+  notes: z.string().optional(),
+  segments: z.array(segmentSchema).optional(),
+});
+
+type TripFormData = z.infer<typeof tripFormSchema>;
 
 const TripNew = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [airline, setAirline] = useState<AirlineKey>("AA");
-  const [confirmationCode, setConfirmationCode] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [brand, setBrand] = useState<string>("");
-  const [paidTotal, setPaidTotal] = useState("");
-  const [ticketNumber, setTicketNumber] = useState("");
-  const [rbd, setRbd] = useState("");
-  const [departDate, setDepartDate] = useState("");
-  const [returnDate, setReturnDate] = useState("");
-  const [notes, setNotes] = useState("");
-  const [segments, setSegments] = useState<Segment[]>([
-    {
-      carrier: "AA",
-      flight_number: "",
-      depart_airport: "",
-      arrive_airport: "",
-      depart_datetime: "",
-      arrive_datetime: "",
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([]);
+
+  const { control, handleSubmit, watch, formState: { errors } } = useForm<TripFormData>({
+    resolver: zodResolver(tripFormSchema),
+    defaultValues: {
+      airline: undefined,
+      confirmation_code: "",
+      last_name: "",
+      paid_total: 0,
+      brand: "",
+      ticket_number: "",
+      rbd: "",
+      notes: "",
     },
-  ]);
+  });
+
+  const selectedAirline = watch("airline");
 
   const addSegment = () => {
     setSegments([
       ...segments,
       {
-        carrier: airline,
+        carrier: selectedAirline || "",
         flight_number: "",
         depart_airport: "",
         arrive_airport: "",
@@ -59,79 +76,93 @@ const TripNew = () => {
   };
 
   const removeSegment = (index: number) => {
-    if (segments.length > 1) {
-      setSegments(segments.filter((_, i) => i !== index));
-    }
+    setSegments(segments.filter((_, i) => i !== index));
   };
 
-  const updateSegment = (index: number, field: keyof Segment, value: string) => {
+  const updateSegment = (index: number, field: keyof z.infer<typeof segmentSchema>, value: string) => {
     const updated = [...segments];
     updated[index] = { ...updated[index], [field]: value };
     setSegments(updated);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: TripFormData) => {
     setLoading(true);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Validate confirmation code
-      if (confirmationCode.length !== 6) {
-        throw new Error("Confirmation code must be 6 characters");
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in",
+          variant: "destructive",
+        });
+        navigate("/auth");
+        return;
       }
 
-      // Create trip
-      const { data: trip, error: tripError } = await supabase
+      // Insert trip
+      const { data: tripData, error: tripError } = await supabase
         .from("trips")
         .insert({
           user_id: user.id,
-          airline,
-          confirmation_code: confirmationCode.toUpperCase(),
-          last_name: lastName,
-          brand: brand || null,
-          rbd: rbd || null,
-          paid_total: parseFloat(paidTotal),
-          ticket_number: ticketNumber || null,
-          depart_date: departDate,
-          return_date: returnDate || null,
-          notes: notes || null,
+          airline: data.airline,
+          confirmation_code: data.confirmation_code.toUpperCase(),
+          last_name: data.last_name,
+          paid_total: data.paid_total,
+          brand: data.brand || null,
+          ticket_number: data.ticket_number || null,
+          rbd: data.rbd?.toUpperCase() || null,
+          notes: data.notes || null,
+          depart_date: null,
+          return_date: null,
+          currency: "USD",
+          status: "active",
         })
         .select()
         .single();
 
       if (tripError) throw tripError;
 
-      // Create segments
-      const segmentInserts = segments.map((seg) => ({
-        trip_id: trip.id,
-        carrier: seg.carrier,
-        flight_number: seg.flight_number,
-        depart_airport: seg.depart_airport.toUpperCase(),
-        arrive_airport: seg.arrive_airport.toUpperCase(),
-        depart_datetime: seg.depart_datetime,
-        arrive_datetime: seg.arrive_datetime,
-      }));
+      // Insert segments if any
+      if (segments.length > 0) {
+        const validSegments = segments.filter(
+          (seg) =>
+            seg.carrier &&
+            seg.flight_number &&
+            seg.depart_airport &&
+            seg.arrive_airport &&
+            seg.depart_datetime &&
+            seg.arrive_datetime
+        );
 
-      const { error: segmentsError } = await supabase
-        .from("segments")
-        .insert(segmentInserts);
+        if (validSegments.length > 0) {
+          const { error: segmentsError } = await supabase.from("segments").insert(
+            validSegments.map((seg) => ({
+              trip_id: tripData.id,
+              carrier: seg.carrier!.toUpperCase(),
+              flight_number: seg.flight_number!,
+              depart_airport: seg.depart_airport!.toUpperCase(),
+              arrive_airport: seg.arrive_airport!.toUpperCase(),
+              depart_datetime: seg.depart_datetime!,
+              arrive_datetime: seg.arrive_datetime!,
+            }))
+          );
 
-      if (segmentsError) throw segmentsError;
+          if (segmentsError) throw segmentsError;
+        }
+      }
 
       toast({
         title: "Trip saved!",
-        description: "Open Guided Reprice to preview credit",
+        description: "Open Guided Reprice to preview credit.",
       });
 
-      navigate(`/trips/${trip.id}`);
-    } catch (error: any) {
+      navigate(`/trips/${tripData.id}`);
+    } catch (error) {
+      console.error("Error saving trip:", error);
       toast({
+        title: "Error",
+        description: "Failed to save trip. Please try again.",
         variant: "destructive",
-        title: "Failed to save trip",
-        description: error.message,
       });
     } finally {
       setLoading(false);
@@ -149,260 +180,280 @@ const TripNew = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Add Trip</h1>
-          <p className="text-muted-foreground">Enter your existing booking details</p>
-        </div>
+      <main className="container mx-auto px-4 py-8 max-w-2xl">
+        <h1 className="text-3xl font-bold mb-2">Add Your Trip</h1>
+        <p className="text-sm text-muted-foreground mb-6 flex items-start gap-2">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          We only need what the airline requires to preview your credit.
+        </p>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Booking Info</CardTitle>
+              <CardTitle>Required Info</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="airline">Airline *</Label>
-                  <Select value={airline} onValueChange={(v) => setAirline(v as AirlineKey)}>
-                    <SelectTrigger id="airline">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="AA">American (AA)</SelectItem>
-                      <SelectItem value="DL">Delta (DL)</SelectItem>
-                      <SelectItem value="UA">United (UA)</SelectItem>
-                      <SelectItem value="AS">Alaska (AS)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmation">Confirmation Code (6 chars) *</Label>
-                  <Input
-                    id="confirmation"
-                    value={confirmationCode}
-                    onChange={(e) => setConfirmationCode(e.target.value.toUpperCase())}
-                    maxLength={6}
-                    pattern="[A-Z0-9]{6}"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="lastName">Last Name *</Label>
-                  <Input
-                    id="lastName"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="paidTotal">Paid Total (USD) *</Label>
-                  <Input
-                    id="paidTotal"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={paidTotal}
-                    onChange={(e) => setPaidTotal(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="brand">Fare Brand</Label>
-                <Select value={brand} onValueChange={setBrand}>
-                  <SelectTrigger id="brand">
-                    <SelectValue placeholder="Select fare type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRAND_OPTIONS.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        {b}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ticketNumber">Ticket Number</Label>
-                  <Input
-                    id="ticketNumber"
-                    value={ticketNumber}
-                    onChange={(e) => setTicketNumber(e.target.value)}
-                    placeholder="13 digits"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rbd">Booking Class</Label>
-                  <Input
-                    id="rbd"
-                    value={rbd}
-                    onChange={(e) => setRbd(e.target.value)}
-                    maxLength={2}
-                    placeholder="Y, J, F..."
-                  />
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="departDate">Departure Date *</Label>
-                  <Input
-                    id="departDate"
-                    type="date"
-                    value={departDate}
-                    onChange={(e) => setDepartDate(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="returnDate">Return Date (if roundtrip)</Label>
-                  <Input
-                    id="returnDate"
-                    type="date"
-                    value={returnDate}
-                    onChange={(e) => setReturnDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Optional notes about this booking"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Flight Segments</CardTitle>
-              <Button type="button" variant="outline" size="sm" onClick={addSegment}>
-                <Plus className="w-4 h-4 mr-1" />
-                Add
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {segments.map((seg, i) => (
-                <div key={i} className="border rounded-lg p-4 space-y-3 relative">
-                  {segments.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeSegment(i)}
-                      className="absolute top-2 right-2"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+              <div>
+                <Label htmlFor="airline">Airline</Label>
+                <Controller
+                  name="airline"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select airline" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AA">American Airlines</SelectItem>
+                        <SelectItem value="DL">Delta Air Lines</SelectItem>
+                        <SelectItem value="UA">United Airlines</SelectItem>
+                        <SelectItem value="AS">Alaska Airlines</SelectItem>
+                      </SelectContent>
+                    </Select>
                   )}
+                />
+                {errors.airline && (
+                  <p className="text-sm text-destructive mt-1">{errors.airline.message}</p>
+                )}
+              </div>
 
-                  <div className="grid sm:grid-cols-3 gap-3">
-                    <div className="space-y-2">
-                      <Label>Carrier</Label>
-                      <Select
-                        value={seg.carrier}
-                        onValueChange={(v) => updateSegment(i, "carrier", v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="AA">AA</SelectItem>
-                          <SelectItem value="DL">DL</SelectItem>
-                          <SelectItem value="UA">UA</SelectItem>
-                          <SelectItem value="AS">AS</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+              <div>
+                <Label htmlFor="confirmation_code">Confirmation Code</Label>
+                <Controller
+                  name="confirmation_code"
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      {...field}
+                      id="confirmation_code"
+                      placeholder="ABC123"
+                      maxLength={6}
+                      className="uppercase"
+                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                    />
+                  )}
+                />
+                {errors.confirmation_code && (
+                  <p className="text-sm text-destructive mt-1">{errors.confirmation_code.message}</p>
+                )}
+              </div>
 
-                    <div className="space-y-2">
-                      <Label>Flight #</Label>
-                      <Input
-                        value={seg.flight_number}
-                        onChange={(e) => updateSegment(i, "flight_number", e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
+              <div>
+                <Label htmlFor="last_name">Last Name</Label>
+                <Controller
+                  name="last_name"
+                  control={control}
+                  render={({ field }) => <Input {...field} id="last_name" placeholder="Smith" />}
+                />
+                {errors.last_name && (
+                  <p className="text-sm text-destructive mt-1">{errors.last_name.message}</p>
+                )}
+              </div>
 
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>From (airport code)</Label>
-                      <Input
-                        value={seg.depart_airport}
-                        onChange={(e) =>
-                          updateSegment(i, "depart_airport", e.target.value.toUpperCase())
-                        }
-                        maxLength={3}
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>To (airport code)</Label>
-                      <Input
-                        value={seg.arrive_airport}
-                        onChange={(e) =>
-                          updateSegment(i, "arrive_airport", e.target.value.toUpperCase())
-                        }
-                        maxLength={3}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <div className="space-y-2">
-                      <Label>Depart Date/Time</Label>
-                      <Input
-                        type="datetime-local"
-                        value={seg.depart_datetime}
-                        onChange={(e) => updateSegment(i, "depart_datetime", e.target.value)}
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Arrive Date/Time</Label>
-                      <Input
-                        type="datetime-local"
-                        value={seg.arrive_datetime}
-                        onChange={(e) => updateSegment(i, "arrive_datetime", e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+              <div>
+                <Label htmlFor="paid_total">Paid Total (USD)</Label>
+                <Controller
+                  name="paid_total"
+                  control={control}
+                  render={({ field }) => (
+                    <Input
+                      {...field}
+                      id="paid_total"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="299.00"
+                    />
+                  )}
+                />
+                {errors.paid_total && (
+                  <p className="text-sm text-destructive mt-1">{errors.paid_total.message}</p>
+                )}
+              </div>
             </CardContent>
           </Card>
+
+          <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+            <Card>
+              <CollapsibleTrigger className="w-full">
+                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">Advanced (optional)</CardTitle>
+                    <ChevronDown
+                      className={`w-5 h-5 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
+                    />
+                  </div>
+                </CardHeader>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <CardContent className="space-y-4 pt-0">
+                  <div>
+                    <Label htmlFor="brand">Fare Brand</Label>
+                    <Controller
+                      name="brand"
+                      control={control}
+                      render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select fare type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {BRAND_OPTIONS.map((b) => (
+                              <SelectItem key={b} value={b}>
+                                {b}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="ticket_number">Ticket Number (13 digits)</Label>
+                    <Controller
+                      name="ticket_number"
+                      control={control}
+                      render={({ field }) => (
+                        <Input {...field} id="ticket_number" placeholder="0012345678901" maxLength={13} />
+                      )}
+                    />
+                    {errors.ticket_number && (
+                      <p className="text-sm text-destructive mt-1">{errors.ticket_number.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="rbd">Booking Class / RBD</Label>
+                    <Controller
+                      name="rbd"
+                      control={control}
+                      render={({ field }) => (
+                        <Input
+                          {...field}
+                          id="rbd"
+                          placeholder="Y"
+                          maxLength={1}
+                          className="uppercase"
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        />
+                      )}
+                    />
+                    {errors.rbd && <p className="text-sm text-destructive mt-1">{errors.rbd.message}</p>}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="notes">Notes</Label>
+                    <Controller
+                      name="notes"
+                      control={control}
+                      render={({ field }) => (
+                        <Textarea {...field} id="notes" placeholder="Any additional notes..." rows={3} />
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label>Flight Segments</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addSegment}>
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Segment
+                      </Button>
+                    </div>
+                    <div className="space-y-4">
+                      {segments.map((seg, idx) => (
+                        <Card key={idx}>
+                          <CardContent className="pt-4 space-y-3">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium">Segment {idx + 1}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeSegment(idx)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs">Carrier</Label>
+                                <Input
+                                  value={seg.carrier}
+                                  onChange={(e) =>
+                                    updateSegment(idx, "carrier", e.target.value.toUpperCase())
+                                  }
+                                  placeholder="AA"
+                                  maxLength={2}
+                                  className="uppercase"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Flight #</Label>
+                                <Input
+                                  value={seg.flight_number}
+                                  onChange={(e) => updateSegment(idx, "flight_number", e.target.value)}
+                                  placeholder="123"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">From</Label>
+                                <Input
+                                  value={seg.depart_airport}
+                                  onChange={(e) =>
+                                    updateSegment(idx, "depart_airport", e.target.value.toUpperCase())
+                                  }
+                                  placeholder="JFK"
+                                  maxLength={3}
+                                  className="uppercase"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">To</Label>
+                                <Input
+                                  value={seg.arrive_airport}
+                                  onChange={(e) =>
+                                    updateSegment(idx, "arrive_airport", e.target.value.toUpperCase())
+                                  }
+                                  placeholder="LAX"
+                                  maxLength={3}
+                                  className="uppercase"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Depart</Label>
+                                <Input
+                                  type="datetime-local"
+                                  value={seg.depart_datetime}
+                                  onChange={(e) => updateSegment(idx, "depart_datetime", e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Arrive</Label>
+                                <Input
+                                  type="datetime-local"
+                                  value={seg.arrive_datetime}
+                                  onChange={(e) => updateSegment(idx, "arrive_datetime", e.target.value)}
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
 
           <div className="flex gap-3">
+            <Button type="button" variant="outline" onClick={() => navigate("/dashboard")} className="flex-1">
+              Cancel
+            </Button>
             <Button type="submit" disabled={loading} className="flex-1">
               {loading ? "Saving..." : "Save Trip"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate("/dashboard")}
-            >
-              Cancel
             </Button>
           </div>
         </form>

@@ -192,7 +192,7 @@ export type Database = {
           confirmation_code: string
           created_at: string
           currency: string
-          depart_date: string
+          depart_date: string | null
           id: string
           last_name: string
           notes: string | null
@@ -209,7 +209,7 @@ export type Database = {
           confirmation_code: string
           created_at?: string
           currency?: string
-          depart_date: string
+          depart_date?: string | null
           id?: string
           last_name: string
           notes?: string | null
@@ -226,7 +226,7 @@ export type Database = {
           confirmation_code?: string
           created_at?: string
           currency?: string
-          depart_date?: string
+          depart_date?: string | null
           id?: string
           last_name?: string
           notes?: string | null
