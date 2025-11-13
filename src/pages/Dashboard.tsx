@@ -16,7 +16,6 @@ const Dashboard = () => {
     tripsAddedThisWeek: 0,
     activeMonitors: 0,
     potentialSavings: 0,
-    avgPriceChange: 0,
   });
 
   useEffect(() => {
@@ -87,22 +86,10 @@ const Dashboard = () => {
 
         const potentialSavings = priceChecks?.reduce((sum, check) => sum + (check.diff_vs_paid || 0), 0) || 0;
 
-        // Avg price change last 7 days
-        const { data: recentChecks } = await supabase
-          .from("price_checks")
-          .select("diff_vs_paid")
-          .in("trip_id", tripIds)
-          .gte("created_at", oneWeekAgo.toISOString());
-
-        const avgPriceChange = recentChecks && recentChecks.length > 0
-          ? recentChecks.reduce((sum, check) => sum + (check.diff_vs_paid || 0), 0) / recentChecks.length
-          : 0;
-
         setInsights({
           tripsAddedThisWeek,
           activeMonitors,
           potentialSavings,
-          avgPriceChange,
         });
       }
 
@@ -156,7 +143,6 @@ const Dashboard = () => {
             tripsAddedThisWeek={insights.tripsAddedThisWeek}
             activeMonitors={insights.activeMonitors}
             potentialSavings={insights.potentialSavings}
-            avgPriceChange={insights.avgPriceChange}
           />
         )}
 
