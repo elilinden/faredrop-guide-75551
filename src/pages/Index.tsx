@@ -14,9 +14,9 @@ const Index = () => {
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
           </div>
-          <Link to="/auth">
-            <Button>Sign In</Button>
-          </Link>
+          <Button asChild>
+            <Link to="/auth">Sign In</Link>
+          </Button>
         </div>
       </header>
 
@@ -28,11 +28,9 @@ const Index = () => {
           <p className="text-xl text-muted-foreground mb-8">
             Manual flight repricing guidance. Track potential savings when airlines drop prices on flights you've already booked.
           </p>
-          <Link to="/auth">
-            <Button size="lg" className="text-lg px-8">
-              Add Your First Trip
-            </Button>
-          </Link>
+          <Button asChild size="lg" className="text-lg px-8">
+            <Link to="/auth">Add Your First Trip</Link>
+          </Button>
         </section>
 
         <section className="max-w-4xl mx-auto mb-16">
@@ -46,7 +44,7 @@ const Index = () => {
               <Card key={i}>
                 <CardContent className="pt-6 text-center">
                   <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <step.icon className="w-6 h-6 text-primary" />
+                    <step.icon aria-hidden="true" className="w-6 h-6 text-primary" />
                   </div>
                   <h3 className="font-semibold mb-2">{step.title}</h3>
                   <p className="text-sm text-muted-foreground">{step.desc}</p>

@@ -199,6 +199,20 @@ function buildBookingUrls(trip: any): BookingUrls {
   const ret = returnDate || null;
   const pax = adults ?? 1;
 
+  const googleFltSegments = [`${from}.${to}.${depart}`];
+  if (ret) {
+    googleFltSegments.push(`${to}.${from}.${ret}`);
+  }
+  const paxNumber = Number(pax);
+  const paxCount = Number.isFinite(paxNumber) && paxNumber > 0 ? Math.floor(paxNumber) : 1;
+
+  const googleUrl = new URL("https://www.google.com/travel/flights/search");
+  googleUrl.searchParams.set("hl", "en");
+  googleUrl.searchParams.set("curr", "USD");
+  googleUrl.searchParams.set("gl", "US");
+  googleUrl.searchParams.set("tfu", "EgYIAhAB");
+  googleUrl.hash = `flt=${googleFltSegments.join("*")};px:${paxCount}`;
+  const google = googleUrl.toString();
   // Build Google Flights URL with enhanced format for better compatibility
   // Using the hash-based deep link format with additional parameters
   const paxNumber = Number(pax);
