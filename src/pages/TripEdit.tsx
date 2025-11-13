@@ -346,12 +346,7 @@ const TripEdit = () => {
               </div>
 
               <div>
-                <Label htmlFor="first_name">
-                  First Name
-                  {(selectedAirline === "AA" || selectedAirline === "DL") && (
-                    <span className="text-destructive ml-1">*</span>
-                  )}
-                </Label>
+                <Label htmlFor="first_name">First Name (optional)</Label>
                 <Controller
                   name="first_name"
                   control={control}
@@ -359,6 +354,11 @@ const TripEdit = () => {
                 />
                 {errors.first_name && (
                   <p className="text-sm text-destructive mt-1">{errors.first_name.message}</p>
+                )}
+                {(selectedAirline === "AA" || selectedAirline === "DL") && !watch("first_name") && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Helpful for {selectedAirline === "AA" ? "American" : "Delta"} (occasionally requested during repricing)
+                  </p>
                 )}
               </div>
 
