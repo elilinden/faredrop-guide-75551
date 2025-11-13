@@ -13,7 +13,6 @@ import { manageTripLinks, changeFlowTips, isBasicEconomy, type AirlineKey } from
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
-
 interface GuidedRepriceWizardProps {
   trip: {
     id: string;
@@ -25,15 +24,16 @@ interface GuidedRepriceWizardProps {
   };
   onComplete?: () => void;
 }
-
 type PriceInfo = {
   paid_total: number;
   last_public_price: number | null;
   last_confidence: string | null;
   last_checked_at: string | null;
 };
-
-export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardProps) => {
+export const GuidedRepriceWizard = ({
+  trip,
+  onComplete
+}: GuidedRepriceWizardProps) => {
   const [step, setStep] = useState(1);
   const [understood, setUnderstood] = useState(false);
   const [previewCredit, setPreviewCredit] = useState("");
@@ -44,76 +44,73 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
   const [priceInfo, setPriceInfo] = useState<PriceInfo | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(true);
   const [checkingNow, setCheckingNow] = useState(false);
-
   const loadPriceInfo = async () => {
     setLoadingPrice(true);
-    const { data, error } = await supabase
-      .from("trips")
-      .select("paid_total, last_public_price, last_confidence, last_checked_at")
-      .eq("id", trip.id)
-      .single();
-
+    const {
+      data,
+      error
+    } = await supabase.from("trips").select("paid_total, last_public_price, last_confidence, last_checked_at").eq("id", trip.id).single();
     if (error) {
       console.error(error);
       toast({
         variant: "destructive",
         title: "Couldn’t load price status",
-        description: error.message,
+        description: error.message
       });
     } else if (data) {
       setPriceInfo(data as PriceInfo);
     }
     setLoadingPrice(false);
   };
-
   useEffect(() => {
     loadPriceInfo();
     // Optional: live updates when price_checks/trips change
-    const channel = supabase
-      .channel(`trip-${trip.id}`)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trips", filter: `id=eq.${trip.id}` }, () =>
-        loadPriceInfo(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "price_checks", filter: `trip_id=eq.${trip.id}` },
-        () => loadPriceInfo(),
-      )
-      .subscribe();
-
+    const channel = supabase.channel(`trip-${trip.id}`).on("postgres_changes", {
+      event: "UPDATE",
+      schema: "public",
+      table: "trips",
+      filter: `id=eq.${trip.id}`
+    }, () => loadPriceInfo()).on("postgres_changes", {
+      event: "INSERT",
+      schema: "public",
+      table: "price_checks",
+      filter: `trip_id=eq.${trip.id}`
+    }, () => loadPriceInfo()).subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.id]);
-
   const handleCheckNow = async () => {
     setCheckingNow(true);
     try {
-      const { data, error } = await supabase.functions.invoke("check-now", {
-        body: { tripId: trip.id },
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke("check-now", {
+        body: {
+          tripId: trip.id
+        }
       });
-
       if (error) {
         console.error(error);
         toast({
           variant: "destructive",
           title: "Price check failed",
-          description: error.message ?? "Please try again in a minute.",
+          description: error.message ?? "Please try again in a minute."
         });
       } else {
         // Refresh from DB so the card reflects the new values
         await loadPriceInfo();
-
         if (data?.observed_price != null) {
           toast({
             title: "Price check complete",
-            description: `Public price found: $${Number(data.observed_price).toFixed(2)} (${data.last_confidence ?? "signal"})`,
+            description: `Public price found: $${Number(data.observed_price).toFixed(2)} (${data.last_confidence ?? "signal"})`
           });
         } else {
           toast({
             title: "No pricing data yet",
-            description: "We couldn’t find public offers for this route/date. Try again later.",
+            description: "We couldn’t find public offers for this route/date. Try again later."
           });
         }
       }
@@ -121,25 +118,22 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
       setCheckingNow(false);
     }
   };
-
   const handleCopyText = async (text: string, label: string) => {
     await navigator.clipboard.writeText(text);
     toast({
       title: "Copied!",
-      description: `${label} copied to clipboard`,
+      description: `${label} copied to clipboard`
     });
   };
-
   const handleSaveReprice = async () => {
     if (!previewCredit || parseFloat(previewCredit) <= 0) {
       toast({
         variant: "destructive",
         title: "Invalid amount",
-        description: "Please enter a valid credit amount",
+        description: "Please enter a valid credit amount"
       });
       return;
     }
-
     setSaving(true);
     try {
       let evidenceUrl = null;
@@ -147,115 +141,66 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
       // Upload evidence if provided
       if (evidenceFile) {
         const {
-          data: { user },
+          data: {
+            user
+          }
         } = await supabase.auth.getUser();
         if (user) {
           const fileExt = evidenceFile.name.split(".").pop();
           const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-
-          const { error: uploadError } = await supabase.storage.from("evidence").upload(fileName, evidenceFile);
-
-          if (uploadError) throw uploadError;
-
           const {
-            data: { publicUrl },
+            error: uploadError
+          } = await supabase.storage.from("evidence").upload(fileName, evidenceFile);
+          if (uploadError) throw uploadError;
+          const {
+            data: {
+              publicUrl
+            }
           } = supabase.storage.from("evidence").getPublicUrl(fileName);
-
           evidenceUrl = publicUrl;
         }
       }
 
       // Save reprice record
-      const { error } = await supabase.from("reprices").insert({
+      const {
+        error
+      } = await supabase.from("reprices").insert({
         trip_id: trip.id,
         preview_credit: parseFloat(previewCredit),
         method: "self-change-preview",
-        evidence_url: evidenceUrl,
+        evidence_url: evidenceUrl
       });
-
       if (error) throw error;
-
       toast({
         title: "Success!",
-        description: `Saved $${previewCredit} potential credit`,
+        description: `Saved $${previewCredit} potential credit`
       });
-
       setStep(4);
       onComplete?.();
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Failed to save",
-        description: error.message,
+        description: error.message
       });
     } finally {
       setSaving(false);
     }
   };
-
-  return (
-    <div className="space-y-4">
+  return <div className="space-y-4">
       {/* --- NEW: Price Watch panel --- */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-lg">Price Watch</CardTitle>
-          <Button onClick={handleCheckNow} disabled={checkingNow} size="sm">
-            {checkingNow ? "Checking…" : "Check Now"}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {loadingPrice && <div className="text-muted-foreground">Loading…</div>}
-
-          {!loadingPrice && priceInfo && (
-            <>
-              {priceInfo.last_checked_at && (
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span>Checked {formatDistanceToNow(new Date(priceInfo.last_checked_at), { addSuffix: true })}</span>
-                </div>
-              )}
-
-              {priceInfo.last_public_price != null ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Last public price:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">${priceInfo.last_public_price.toFixed(2)}</span>
-                    {priceInfo.last_public_price < priceInfo.paid_total && (
-                      <Badge
-                        variant="outline"
-                        className="text-xs bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
-                      >
-                        <TrendingDown className="w-3 h-3 mr-1" />$
-                        {(priceInfo.paid_total - priceInfo.last_public_price).toFixed(2)}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-muted-foreground">No pricing data available yet.</div>
-              )}
-
-              {priceInfo.last_confidence && (
-                <div className="text-xs text-muted-foreground">Signal: {priceInfo.last_confidence}</div>
-              )}
-            </>
-          )}
-        </CardContent>
+        
+        
       </Card>
 
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-6">
-        {[1, 2, 3, 4].map((s) => (
-          <div
-            key={s}
-            className={`h-2 flex-1 rounded-full transition-colors ${s <= step ? "bg-primary" : "bg-muted"}`}
-          />
-        ))}
+        {[1, 2, 3, 4].map(s => {})}
       </div>
 
       {/* Step 1: Prep */}
-      {step === 1 && (
-        <Card>
+      {step === 1 && <Card>
           <CardHeader>
             <CardTitle className="text-lg">Step 1: Quick Prep</CardTitle>
           </CardHeader>
@@ -264,11 +209,9 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               Changing after check-in is limited. Best to preview before your flight.
             </AlertBanner>
 
-            {isBasicEconomy(trip.brand) && (
-              <AlertBanner variant="warning" title="Basic Economy Alert">
+            {isBasicEconomy(trip.brand) && <AlertBanner variant="warning" title="Basic Economy Alert">
                 Most Basic Economy tickets can't be changed. The airline may block this entirely.
-              </AlertBanner>
-            )}
+              </AlertBanner>}
 
             <div className="space-y-3 text-sm">
               <p className="font-medium">What stays the same:</p>
@@ -280,11 +223,7 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
             </div>
 
             <div className="flex items-start gap-2 pt-2">
-              <Checkbox
-                id="understand"
-                checked={understood}
-                onCheckedChange={(checked) => setUnderstood(checked as boolean)}
-              />
+              <Checkbox id="understand" checked={understood} onCheckedChange={checked => setUnderstood(checked as boolean)} />
               <label htmlFor="understand" className="text-sm cursor-pointer leading-tight">
                 I understand this is guidance only—I'll execute any changes myself
               </label>
@@ -294,12 +233,10 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               Got it, next step
             </Button>
           </CardContent>
-        </Card>
-      )}
+        </Card>}
 
       {/* Step 2: Open Manage Trip */}
-      {step === 2 && (
-        <Card>
+      {step === 2 && <Card>
           <CardHeader>
             <CardTitle className="text-lg">Step 2: Open Airline Site</CardTitle>
           </CardHeader>
@@ -311,12 +248,10 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
 
             <CopyableLink url={manageTripLinks[trip.airline]} label="Open Manage Trip page" />
 
-            {!trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && (
-              <AlertBanner variant="warning" title="Missing first name">
+            {!trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && <AlertBanner variant="warning" title="Missing first name">
                 Add first name to this trip to use Manage Trip reliably with{" "}
                 {trip.airline === "AA" ? "American" : "Delta"}.
-              </AlertBanner>
-            )}
+              </AlertBanner>}
 
             <div className="bg-muted/50 border rounded-lg p-4 space-y-3">
               <p className="text-sm font-medium">
@@ -326,34 +261,23 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Confirmation code:</span>
-                  <button
-                    onClick={() => handleCopyText(trip.confirmation_code, "Confirmation code")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors"
-                  >
+                  <button onClick={() => handleCopyText(trip.confirmation_code, "Confirmation code")} className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors">
                     <span className="font-mono font-semibold text-sm">{trip.confirmation_code}</span>
                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 </div>
 
-                {trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && (
-                  <div className="flex items-center justify-between">
+                {trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">First name:</span>
-                    <button
-                      onClick={() => handleCopyText(trip.first_name!, "First name")}
-                      className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors"
-                    >
+                    <button onClick={() => handleCopyText(trip.first_name!, "First name")} className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors">
                       <span className="font-semibold text-sm">{trip.first_name}</span>
                       <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
-                  </div>
-                )}
+                  </div>}
 
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Last name:</span>
-                  <button
-                    onClick={() => handleCopyText(trip.last_name, "Last name")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors"
-                  >
+                  <button onClick={() => handleCopyText(trip.last_name, "Last name")} className="inline-flex items-center gap-1.5 px-3 py-1 bg-background border rounded-md hover:bg-accent transition-colors">
                     <span className="font-semibold text-sm">{trip.last_name}</span>
                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
@@ -368,12 +292,10 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
             <div className="space-y-2">
               <p className="text-sm font-medium">Follow these steps:</p>
               <ul className="space-y-2">
-                {changeFlowTips[trip.airline].map((tip, i) => (
-                  <li key={i} className="text-sm text-muted-foreground flex gap-2">
+                {changeFlowTips[trip.airline].map((tip, i) => <li key={i} className="text-sm text-muted-foreground flex gap-2">
                     <span className="text-primary font-semibold shrink-0">{i + 1}.</span>
                     <span>{tip}</span>
-                  </li>
-                ))}
+                  </li>)}
               </ul>
             </div>
 
@@ -384,12 +306,10 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               Back
             </Button>
           </CardContent>
-        </Card>
-      )}
+        </Card>}
 
       {/* Step 3: Preview Change */}
-      {step === 3 && (
-        <Card>
+      {step === 3 && <Card>
           <CardHeader>
             <CardTitle className="text-lg">Step 3: Record What You See</CardTitle>
           </CardHeader>
@@ -402,27 +322,13 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               <Label htmlFor="credit">Preview credit (USD)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                <Input
-                  id="credit"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={previewCredit}
-                  onChange={(e) => setPreviewCredit(e.target.value)}
-                  className="pl-7"
-                />
+                <Input id="credit" type="number" step="0.01" min="0" placeholder="0.00" value={previewCredit} onChange={e => setPreviewCredit(e.target.value)} className="pl-7" />
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="evidence">Screenshot (optional)</Label>
-              <Input
-                id="evidence"
-                type="file"
-                accept="image/png,image/jpeg"
-                onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
-              />
+              <Input id="evidence" type="file" accept="image/png,image/jpeg" onChange={e => setEvidenceFile(e.target.files?.[0] || null)} />
               <p className="text-xs text-muted-foreground">PNG or JPG, max 2MB</p>
             </div>
 
@@ -433,12 +339,10 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               Back
             </Button>
           </CardContent>
-        </Card>
-      )}
+        </Card>}
 
       {/* Step 4: Success */}
-      {step === 4 && (
-        <Card className="border-success/20 bg-success/5">
+      {step === 4 && <Card className="border-success/20 bg-success/5">
           <CardContent className="pt-6 text-center space-y-4">
             <div className="w-16 h-16 bg-success/10 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8 text-success" />
@@ -456,8 +360,6 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               </p>
             </div>
           </CardContent>
-        </Card>
-      )}
-    </div>
-  );
+        </Card>}
+    </div>;
 };
