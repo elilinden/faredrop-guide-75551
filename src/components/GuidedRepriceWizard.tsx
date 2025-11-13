@@ -247,10 +247,12 @@ export const GuidedRepriceWizard = ({
 
             <CopyableLink url={manageTripLinks[trip.airline]} label="Open Manage Trip page" />
 
-            {!trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && <AlertBanner variant="warning" title="Missing first name">
-                Add first name to this trip to use Manage Trip reliably with{" "}
-                {trip.airline === "AA" ? "American" : "Delta"}.
-              </AlertBanner>}
+            {!trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && (
+              <AlertBanner variant="info" title="Optional: add first name">
+                Including the passenger's first name helps Manage Trip load smoothly on{" "}
+                {trip.airline === "AA" ? "American" : "Delta"}, but it's not required to track fares.
+              </AlertBanner>
+            )}
 
             <div className="bg-muted/50 border rounded-lg p-4 space-y-3">
               <p className="text-sm font-medium">
