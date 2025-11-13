@@ -9,8 +9,8 @@ const AMADEUS_ENV = (Deno.env.get("AMADEUS_ENV") || "test") === "production" ? "
 const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 function error(status: number, message: string) {
@@ -116,7 +116,7 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; currency: st
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -131,11 +131,18 @@ Deno.serve(async (req) => {
 
     // Service client with the caller's JWT attached for user identity check
     const supabase = createClient(supabaseUrl, serviceKey, {
-      global: { headers: { Authorization: auth } },
+      global: {
+        headers: {
+          Authorization: `Bearer ${serviceKey}`,
+          "x-user-jwt": auth.replace("Bearer ", ""), // pass the user’s JWT *separately*
+        },
+      },
     });
 
     // Identify the caller
-    const { data: authData } = await supabase.auth.getUser();
+    const userJwt = req.headers.get("Authorization")?.replace("Bearer ", "");
+    const { data: authData } = await createClient(supabaseUrl, userJwt).auth.getUser();
+
     const userId = authData?.user?.id;
     if (!userId) return error(401, "Not authenticated");
 
