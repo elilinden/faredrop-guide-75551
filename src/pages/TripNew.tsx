@@ -18,6 +18,8 @@ import { BRAND_OPTIONS } from "@/lib/airlines";
 import { MagicPasteImporter } from "@/components/MagicPasteImporter";
 import type { ParsedTrip } from "@/lib/import/parsers";
 import { logAudit } from "@/lib/audit";
+import { AirportInput } from "@/components/AirportInput";
+import { AIRPORTS } from "@/data/airports";
 
 const manageTripLinks = {
   AA: 'https://www.aa.com/reservation/view/find-your-reservation',
@@ -75,6 +77,7 @@ const TripNew = () => {
   const [segments, setSegments] = useState<Array<z.infer<typeof segmentSchema>>>([]);
   const [duplicateTrip, setDuplicateTrip] = useState<{ id: string; airline: string; pnr: string } | null>(null);
   const [activeTab, setActiveTab] = useState("form");
+  const [airportDisplayValues, setAirportDisplayValues] = useState<{ [key: string]: string }>({});
 
   const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<TripFormData>({
     resolver: zodResolver(tripFormSchema),
@@ -191,6 +194,25 @@ const TripNew = () => {
       
       console.log('[handleImport] Formatted segments:', formattedSegments);
       setSegments(formattedSegments);
+      
+      // Initialize display values for airports
+      const displayValues: { [key: string]: string } = {};
+      formattedSegments.forEach((seg, idx) => {
+        if (seg.depart_airport) {
+          const airport = AIRPORTS.find(a => a.iata === seg.depart_airport.toUpperCase());
+          displayValues[`${idx}-from`] = airport 
+            ? `${airport.iata} – ${airport.name}${airport.city ? ` (${airport.city})` : ""}`
+            : seg.depart_airport;
+        }
+        if (seg.arrive_airport) {
+          const airport = AIRPORTS.find(a => a.iata === seg.arrive_airport.toUpperCase());
+          displayValues[`${idx}-to`] = airport 
+            ? `${airport.iata} – ${airport.name}${airport.city ? ` (${airport.city})` : ""}`
+            : seg.arrive_airport;
+        }
+      });
+      setAirportDisplayValues(displayValues);
+      
       setAdvancedOpen(true);
     }
 
@@ -603,27 +625,43 @@ const TripNew = () => {
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">From</Label>
-                          <Input
-                            value={seg.depart_airport || ""}
-                            onChange={(e) =>
-                              updateSegment(idx, "depart_airport", e.target.value.toUpperCase())
-                            }
-                            placeholder="JFK"
-                            maxLength={3}
-                            className="uppercase"
+                          <AirportInput
+                            label="From"
+                            value={airportDisplayValues[`${idx}-from`] || seg.depart_airport || ""}
+                            onChange={(value) => {
+                              setAirportDisplayValues(prev => ({
+                                ...prev,
+                                [`${idx}-from`]: value
+                              }));
+                            }}
+                            onSelectAirport={(airport) => {
+                              updateSegment(idx, "depart_airport", airport.iata);
+                              setAirportDisplayValues(prev => ({
+                                ...prev,
+                                [`${idx}-from`]: `${airport.iata} – ${airport.name}${airport.city ? ` (${airport.city})` : ""}`
+                              }));
+                            }}
+                            placeholder="Type city or code..."
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">To</Label>
-                          <Input
-                            value={seg.arrive_airport || ""}
-                            onChange={(e) =>
-                              updateSegment(idx, "arrive_airport", e.target.value.toUpperCase())
-                            }
-                            placeholder="LAX"
-                            maxLength={3}
-                            className="uppercase"
+                          <AirportInput
+                            label="To"
+                            value={airportDisplayValues[`${idx}-to`] || seg.arrive_airport || ""}
+                            onChange={(value) => {
+                              setAirportDisplayValues(prev => ({
+                                ...prev,
+                                [`${idx}-to`]: value
+                              }));
+                            }}
+                            onSelectAirport={(airport) => {
+                              updateSegment(idx, "arrive_airport", airport.iata);
+                              setAirportDisplayValues(prev => ({
+                                ...prev,
+                                [`${idx}-to`]: `${airport.iata} – ${airport.name}${airport.city ? ` (${airport.city})` : ""}`
+                              }));
+                            }}
+                            placeholder="Type city or code..."
                           />
                         </div>
                         <div>
