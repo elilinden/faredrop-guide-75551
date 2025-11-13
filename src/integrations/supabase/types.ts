@@ -274,7 +274,9 @@ export type Database = {
           last_checked_at: string | null
           last_confidence: string | null
           last_name: string
+          last_public_currency: string | null
           last_public_price: number | null
+          last_public_provider: string | null
           last_signal_at: string | null
           last_signal_price: number | null
           monitor_frequency_minutes: number | null
@@ -308,7 +310,9 @@ export type Database = {
           last_checked_at?: string | null
           last_confidence?: string | null
           last_name: string
+          last_public_currency?: string | null
           last_public_price?: number | null
+          last_public_provider?: string | null
           last_signal_at?: string | null
           last_signal_price?: number | null
           monitor_frequency_minutes?: number | null
@@ -342,7 +346,9 @@ export type Database = {
           last_checked_at?: string | null
           last_confidence?: string | null
           last_name?: string
+          last_public_currency?: string | null
           last_public_price?: number | null
+          last_public_provider?: string | null
           last_signal_at?: string | null
           last_signal_price?: number | null
           monitor_frequency_minutes?: number | null

@@ -154,7 +154,7 @@ function mapTripToSearchParams(trip: any) {
   return { origin, destination, departureDate, returnDate, adults, cabin };
 }
 
-async function fetchPublicFare(trip: any): Promise<{ price: number; confidence: string } | null> {
+async function fetchPublicFare(trip: any): Promise<{ price: number; currency: string; confidence: string } | null> {
   const { origin, destination, departureDate, returnDate, adults, cabin } = mapTripToSearchParams(trip);
 
   if (!origin || !destination || !departureDate) {
@@ -191,6 +191,7 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; confidence: 
 
     const first = data?.data?.[0];
     const total = first?.price?.grandTotal;
+    const currency = first?.price?.currency || "USD";
 
     if (!total) {
       console.log(`[fetchPublicFare] No offers found for trip ${trip.id}`);
@@ -205,6 +206,7 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; confidence: 
 
     return {
       price: Number(total),
+      currency,
       confidence: hasExactFlightInfo ? "exact-flight" : "route-estimate",
     };
   } catch (e) {
@@ -212,7 +214,7 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; confidence: 
     // Dev fallback if enabled
     if (Deno.env.get("ALLOW_DUMMY_PRICES") === "true") {
       console.log(`[fetchPublicFare] Using dummy price for trip ${trip.id}`);
-      return { price: 123.45, confidence: "route-estimate" };
+      return { price: 123.45, currency: "USD", confidence: "route-estimate" };
     }
     return null;
   }
@@ -365,6 +367,8 @@ async function checkTrip(trip: any, userPrefs: any) {
     const diff = trip.paid_total - publicFare.price;
     
     updateData.last_public_price = publicFare.price;
+    updateData.last_public_currency = publicFare.currency;
+    updateData.last_public_provider = "amadeus";
     updateData.last_confidence = publicFare.confidence;
 
     // Insert into price_checks history

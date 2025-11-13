@@ -159,6 +159,8 @@ Deno.serve(async (req) => {
 
     if (publicFare) {
       update.last_public_price = publicFare.price;
+      update.last_public_currency = publicFare.currency;
+      update.last_public_provider = "amadeus";
       update.last_confidence = publicFare.confidence;
 
       // history record
