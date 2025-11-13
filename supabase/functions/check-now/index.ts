@@ -8,10 +8,15 @@ const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const AMADEUS_ENV = (Deno.env.get("AMADEUS_ENV") || "test") === "production" ? "production" : "test";
 const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com";
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 function error(status: number, message: string) {
   return new Response(JSON.stringify({ ok: false, error: message }), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -110,6 +115,11 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; currency: st
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
     if (req.method !== "POST") return error(405, "Use POST");
 
@@ -182,7 +192,7 @@ Deno.serve(async (req) => {
         last_confidence: update.last_confidence ?? null,
         message: publicFare ? "Price check complete." : "Price check complete. No pricing data available yet.",
       }),
-      { headers: { "Content-Type": "application/json" } },
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
     console.error("[check-now] Unhandled error:", e);
