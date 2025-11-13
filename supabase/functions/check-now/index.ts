@@ -64,7 +64,7 @@ async function getAmadeusToken() {
 
   if (!res.ok) throw new Error("Amadeus auth failed");
   const data = await res.json();
-  return data.access_token;
+  return data.access_token as string;
 }
 
 /* -----------------------------------------------------------
@@ -86,7 +86,7 @@ async function fetchPublicFare(trip: any) {
   url.searchParams.set("currencyCode", "USD");
   url.searchParams.set("max", "20");
 
-  const res = await fetch(url, {
+  const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
   });
 
@@ -102,7 +102,7 @@ async function fetchPublicFare(trip: any) {
 
   /* -------------------------------------------------------
      EXACT MODE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
   if (trip.price_mode === "exact" && trip.segments?.length) {
     const matches = offers.filter((offer: any) => {
       const segs = offer.itineraries.flatMap((i: any) => i.segments) || [];
@@ -110,29 +110,34 @@ async function fetchPublicFare(trip: any) {
 
       return segs.every((seg: any, idx: number) => {
         const orig = trip.segments[idx];
-        return seg.carrierCode === orig.carrier && seg.number === String(orig.flight_number);
+        return seg.carrierCode === orig.carrier && String(seg.number) === String(orig.flight_number);
       });
     });
 
     if (matches.length === 0) return null;
 
-    const best = matches.map((o: any) => Number(o.price.grandTotal)).sort((a, b) => a - b)[0];
+    const best = matches
+      .map((o: any) => Number(o.price.grandTotal))
+      .filter((n: number) => n > 0)
+      .sort((a: number, b: number) => a - b)[0];
+
+    if (!best) return null;
 
     return {
       price: best,
       currency: "USD",
       confidence: "exact-flight",
-    };
+    } as const;
   }
 
   /* -------------------------------------------------------
      SIMILAR MODE — LOWEST PRICE ON ROUTE
-     ------------------------------------------------------- */
+  ------------------------------------------------------- */
 
   const best = offers
     .map((o: any) => Number(o.price.grandTotal))
     .filter((n: number) => n > 0)
-    .sort((a, b) => a - b)[0];
+    .sort((a: number, b: number) => a - b)[0];
 
   if (!best) return null;
 
@@ -140,7 +145,7 @@ async function fetchPublicFare(trip: any) {
     price: best,
     currency: "USD",
     confidence: "route-estimate",
-  };
+  } as const;
 }
 
 /* -----------------------------------------------------------
@@ -153,7 +158,6 @@ type BookingUrls = {
 };
 
 function buildBookingUrls(trip: any): BookingUrls {
-  // Reuse the same logic you use for pricing so origin/dates stay in sync
   const { origin, destination, departureDate, returnDate, adults } = mapTrip(trip);
 
   if (!origin || !destination || !departureDate) {
@@ -166,7 +170,6 @@ function buildBookingUrls(trip: any): BookingUrls {
   const ret = returnDate || null;
   const pax = adults ?? 1;
 
-  // Google Flights query – nice and generic, so Google can figure it out
   const googleQuery = `Flights from ${from} to ${to} on ${depart}`;
   const google = `https://www.google.com/travel/flights?q=${encodeURIComponent(googleQuery)}`;
 
@@ -211,9 +214,8 @@ function buildBookingUrls(trip: any): BookingUrls {
       break;
     }
 
-    default: {
+    default:
       airlineLink = null;
-    }
   }
 
   return { google, airlineLink };
@@ -235,7 +237,7 @@ Deno.serve(async (req) => {
     const jwt = authHeader.replace("Bearer ", "");
     if (!jwt) return error(401, "Missing authorization token");
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}) as any);
     const { tripId } = body;
     if (!tripId) return error(400, "Missing tripId");
 
@@ -260,7 +262,6 @@ Deno.serve(async (req) => {
     if (miss.length) return error(400, "Trip missing required fields: " + miss.join(", "));
 
     const fare = await fetchPublicFare(trip);
-
     const { google, airlineLink } = buildBookingUrls(trip);
 
     const update: any = {
