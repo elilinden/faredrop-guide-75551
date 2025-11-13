@@ -199,10 +199,8 @@ function buildBookingUrls(trip: any): BookingUrls {
   const ret = returnDate || null;
   const pax = adults ?? 1;
 
-  const googleFltSegments = [`${from}.${to}.${depart}`];
-  if (ret) {
-    googleFltSegments.push(`${to}.${from}.${ret}`);
-  }
+  // Build Google Flights URL with enhanced format for better compatibility
+  // Using the hash-based deep link format with additional parameters
   const paxNumber = Number(pax);
   const paxCount = Number.isFinite(paxNumber) && paxNumber > 0 ? Math.floor(paxNumber) : 1;
 
@@ -214,6 +212,15 @@ function buildBookingUrls(trip: any): BookingUrls {
   const google = googleUrl.toString();
   const googlePassengerSuffix = `;px:${paxCount}`;
   const google = `https://www.google.com/travel/flights?hl=en#flt=${googleFltSegments.join("*")}${googlePassengerSuffix}`;
+  
+  let google: string;
+  if (ret) {
+    // Round trip format with more parameters for reliability
+    google = `https://www.google.com/travel/flights?hl=en&curr=USD#flt=${from}.${to}.${depart}*${to}.${from}.${ret};c:e;e:1;a:${paxCount};sd:1;t:f`;
+  } else {
+    // One-way format with more parameters for reliability
+    google = `https://www.google.com/travel/flights?hl=en&curr=USD#flt=${from}.${to}.${depart};c:e;e:1;a:${paxCount};sd:1;t:f`;
+  }
 
   let airlineLink: string | null = null;
   const airline = (trip.airline || "").toUpperCase();
