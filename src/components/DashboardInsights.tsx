@@ -1,21 +1,19 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { TrendingDown, Bell, Calendar, DollarSign } from "lucide-react";
+import { TrendingDown, Bell, Calendar } from "lucide-react";
 
 interface DashboardInsightsProps {
   tripsAddedThisWeek: number;
   activeMonitors: number;
   potentialSavings: number;
-  avgPriceChange: number;
 }
 
 export const DashboardInsights = ({
   tripsAddedThisWeek,
   activeMonitors,
   potentialSavings,
-  avgPriceChange,
 }: DashboardInsightsProps) => {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center gap-4">
@@ -58,24 +56,6 @@ export const DashboardInsights = ({
                 ${potentialSavings.toFixed(0)}
               </p>
               <p className="text-xs text-muted-foreground">last 30 days</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Avg Change (7d)</p>
-              <p className="text-2xl font-bold">
-                {avgPriceChange >= 0 ? "+" : ""}
-                {avgPriceChange.toFixed(0)}%
-              </p>
-              <p className="text-xs text-muted-foreground">vs. previous week</p>
             </div>
           </div>
         </CardContent>
