@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { AlertBanner } from "@/components/AlertBanner";
 import { AirlineBadge } from "@/components/AirlineBadge";
 import { CopyableLink } from "@/components/CopyableLink";
-import { Copy, CheckCircle2 } from "lucide-react";
+import { Copy, CheckCircle2, Clock, TrendingDown } from "lucide-react";
 import { manageTripLinks, changeFlowTips, isBasicEconomy, type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { formatDistanceToNow } from "date-fns";
 
 interface GuidedRepriceWizardProps {
   trip: {
@@ -24,12 +26,101 @@ interface GuidedRepriceWizardProps {
   onComplete?: () => void;
 }
 
+type PriceInfo = {
+  paid_total: number;
+  last_public_price: number | null;
+  last_confidence: string | null;
+  last_checked_at: string | null;
+};
+
 export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardProps) => {
   const [step, setStep] = useState(1);
   const [understood, setUnderstood] = useState(false);
   const [previewCredit, setPreviewCredit] = useState("");
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // --- New state for Price Watch ---
+  const [priceInfo, setPriceInfo] = useState<PriceInfo | null>(null);
+  const [loadingPrice, setLoadingPrice] = useState(true);
+  const [checkingNow, setCheckingNow] = useState(false);
+
+  const loadPriceInfo = async () => {
+    setLoadingPrice(true);
+    const { data, error } = await supabase
+      .from("trips")
+      .select("paid_total, last_public_price, last_confidence, last_checked_at")
+      .eq("id", trip.id)
+      .single();
+
+    if (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title: "Couldn’t load price status",
+        description: error.message,
+      });
+    } else if (data) {
+      setPriceInfo(data as PriceInfo);
+    }
+    setLoadingPrice(false);
+  };
+
+  useEffect(() => {
+    loadPriceInfo();
+    // Optional: live updates when price_checks/trips change
+    const channel = supabase
+      .channel(`trip-${trip.id}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "trips", filter: `id=eq.${trip.id}` }, () =>
+        loadPriceInfo(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "price_checks", filter: `trip_id=eq.${trip.id}` },
+        () => loadPriceInfo(),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip.id]);
+
+  const handleCheckNow = async () => {
+    setCheckingNow(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-now", {
+        body: { tripId: trip.id },
+      });
+
+      if (error) {
+        console.error(error);
+        toast({
+          variant: "destructive",
+          title: "Price check failed",
+          description: error.message ?? "Please try again in a minute.",
+        });
+      } else {
+        // Refresh from DB so the card reflects the new values
+        await loadPriceInfo();
+
+        if (data?.observed_price != null) {
+          toast({
+            title: "Price check complete",
+            description: `Public price found: $${Number(data.observed_price).toFixed(2)} (${data.last_confidence ?? "signal"})`,
+          });
+        } else {
+          toast({
+            title: "No pricing data yet",
+            description: "We couldn’t find public offers for this route/date. Try again later.",
+          });
+        }
+      }
+    } finally {
+      setCheckingNow(false);
+    }
+  };
 
   const handleCopyText = async (text: string, label: string) => {
     await navigator.clipboard.writeText(text);
@@ -55,30 +146,30 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
 
       // Upload evidence if provided
       if (evidenceFile) {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (user) {
-          const fileExt = evidenceFile.name.split('.').pop();
+          const fileExt = evidenceFile.name.split(".").pop();
           const fileName = `${user.id}/${Date.now()}.${fileExt}`;
-          
-          const { error: uploadError } = await supabase.storage
-            .from('evidence')
-            .upload(fileName, evidenceFile);
+
+          const { error: uploadError } = await supabase.storage.from("evidence").upload(fileName, evidenceFile);
 
           if (uploadError) throw uploadError;
 
-          const { data: { publicUrl } } = supabase.storage
-            .from('evidence')
-            .getPublicUrl(fileName);
-          
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from("evidence").getPublicUrl(fileName);
+
           evidenceUrl = publicUrl;
         }
       }
 
       // Save reprice record
-      const { error } = await supabase.from('reprices').insert({
+      const { error } = await supabase.from("reprices").insert({
         trip_id: trip.id,
         preview_credit: parseFloat(previewCredit),
-        method: 'self-change-preview',
+        method: "self-change-preview",
         evidence_url: evidenceUrl,
       });
 
@@ -104,14 +195,60 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
 
   return (
     <div className="space-y-4">
+      {/* --- NEW: Price Watch panel --- */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-lg">Price Watch</CardTitle>
+          <Button onClick={handleCheckNow} disabled={checkingNow} size="sm">
+            {checkingNow ? "Checking…" : "Check Now"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          {loadingPrice && <div className="text-muted-foreground">Loading…</div>}
+
+          {!loadingPrice && priceInfo && (
+            <>
+              {priceInfo.last_checked_at && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock className="w-4 h-4" />
+                  <span>Checked {formatDistanceToNow(new Date(priceInfo.last_checked_at), { addSuffix: true })}</span>
+                </div>
+              )}
+
+              {priceInfo.last_public_price != null ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Last public price:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">${priceInfo.last_public_price.toFixed(2)}</span>
+                    {priceInfo.last_public_price < priceInfo.paid_total && (
+                      <Badge
+                        variant="outline"
+                        className="text-xs bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800"
+                      >
+                        <TrendingDown className="w-3 h-3 mr-1" />$
+                        {(priceInfo.paid_total - priceInfo.last_public_price).toFixed(2)}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">No pricing data available yet.</div>
+              )}
+
+              {priceInfo.last_confidence && (
+                <div className="text-xs text-muted-foreground">Signal: {priceInfo.last_confidence}</div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-6">
         {[1, 2, 3, 4].map((s) => (
           <div
             key={s}
-            className={`h-2 flex-1 rounded-full transition-colors ${
-              s <= step ? "bg-primary" : "bg-muted"
-            }`}
+            className={`h-2 flex-1 rounded-full transition-colors ${s <= step ? "bg-primary" : "bg-muted"}`}
           />
         ))}
       </div>
@@ -148,19 +285,12 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
                 checked={understood}
                 onCheckedChange={(checked) => setUnderstood(checked as boolean)}
               />
-              <label
-                htmlFor="understand"
-                className="text-sm cursor-pointer leading-tight"
-              >
+              <label htmlFor="understand" className="text-sm cursor-pointer leading-tight">
                 I understand this is guidance only—I'll execute any changes myself
               </label>
             </div>
 
-            <Button
-              onClick={() => setStep(2)}
-              disabled={!understood}
-              className="w-full"
-            >
+            <Button onClick={() => setStep(2)} disabled={!understood} className="w-full">
               Got it, next step
             </Button>
           </CardContent>
@@ -183,17 +313,16 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
 
             {!trip.first_name && (trip.airline === "AA" || trip.airline === "DL") && (
               <AlertBanner variant="warning" title="Missing first name">
-                Add first name to this trip to use Manage Trip reliably with {trip.airline === "AA" ? "American" : "Delta"}.
+                Add first name to this trip to use Manage Trip reliably with{" "}
+                {trip.airline === "AA" ? "American" : "Delta"}.
               </AlertBanner>
             )}
 
             <div className="bg-muted/50 border rounded-lg p-4 space-y-3">
               <p className="text-sm font-medium">
-                {trip.airline === "AA" || trip.airline === "DL" 
-                  ? "You'll typically need:" 
-                  : "You'll typically need:"}
+                {trip.airline === "AA" || trip.airline === "DL" ? "You'll typically need:" : "You'll typically need:"}
               </p>
-              
+
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Confirmation code:</span>
@@ -229,12 +358,6 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
                     <Copy className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 </div>
-
-                {trip.first_name && (trip.airline === "UA" || trip.airline === "AS") && (
-                  <p className="text-xs text-muted-foreground italic">
-                    First name ({trip.first_name}) sometimes requested
-                  </p>
-                )}
               </div>
 
               <p className="text-xs text-muted-foreground mt-2 pt-2 border-t">
@@ -303,11 +426,7 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
               <p className="text-xs text-muted-foreground">PNG or JPG, max 2MB</p>
             </div>
 
-            <Button
-              onClick={handleSaveReprice}
-              disabled={!previewCredit || saving}
-              className="w-full"
-            >
+            <Button onClick={handleSaveReprice} disabled={!previewCredit || saving} className="w-full">
               {saving ? "Saving..." : "Save this credit"}
             </Button>
             <Button variant="ghost" onClick={() => setStep(2)} className="w-full">
@@ -332,8 +451,8 @@ export const GuidedRepriceWizard = ({ trip, onComplete }: GuidedRepriceWizardPro
             </div>
             <div className="bg-background/50 border rounded-lg p-4 text-left text-sm text-muted-foreground">
               <p>
-                If you want this credit, complete the change on the airline's site. 
-                The credit will go to your airline wallet/account for future use.
+                If you want this credit, complete the change on the airline's site. The credit will go to your airline
+                wallet/account for future use.
               </p>
             </div>
           </CardContent>
