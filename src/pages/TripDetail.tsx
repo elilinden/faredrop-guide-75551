@@ -20,7 +20,18 @@ import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { DeleteTripDialog } from "@/components/DeleteTripDialog";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock, AlertTriangle, Pencil } from "lucide-react";
+import {
+  Plane,
+  Calendar,
+  DollarSign,
+  ArrowLeft,
+  MoreVertical,
+  Trash2,
+  RefreshCw,
+  Clock,
+  AlertTriangle,
+  Pencil,
+} from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
@@ -47,7 +58,9 @@ const TripDetail = () => {
   useEffect(() => {
     const fetchTrip = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (!user) {
           navigate("/auth");
           return;
@@ -106,11 +119,7 @@ const TripDetail = () => {
 
     const interval = setInterval(async () => {
       try {
-        const { data: tripData } = await supabase
-          .from("trips")
-          .select("*")
-          .eq("id", id)
-          .single();
+        const { data: tripData } = await supabase.from("trips").select("*").eq("id", id).single();
 
         if (tripData) {
           setTrip(tripData);
@@ -124,34 +133,26 @@ const TripDetail = () => {
   }, [autoRefresh, id]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
   if (!trip) return null;
 
-  const route = segments.length > 0
-    ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
-    : "Route details";
+  const route =
+    segments.length > 0
+      ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
+      : "Route details";
 
   const handleMonitoringToggle = async (enabled: boolean) => {
     try {
-      const { error } = await supabase
-        .from("trips")
-        .update({ monitoring_enabled: enabled })
-        .eq("id", trip.id);
+      const { error } = await supabase.from("trips").update({ monitoring_enabled: enabled }).eq("id", trip.id);
 
       if (error) throw error;
 
       setMonitoringEnabled(enabled);
       toast({
         title: enabled ? "Monitoring enabled" : "Monitoring disabled",
-        description: enabled
-          ? "We'll email you if prices might drop"
-          : "Price monitoring paused for this trip",
+        description: enabled ? "We'll email you if prices might drop" : "Price monitoring paused for this trip",
       });
     } catch (error: any) {
       toast({
@@ -169,10 +170,7 @@ const TripDetail = () => {
     setMonitorThreshold(numValue);
 
     try {
-      const { error } = await supabase
-        .from("trips")
-        .update({ monitor_threshold: numValue })
-        .eq("id", trip.id);
+      const { error } = await supabase.from("trips").update({ monitor_threshold: numValue }).eq("id", trip.id);
 
       if (error) throw error;
 
@@ -195,10 +193,7 @@ const TripDetail = () => {
 
     try {
       // Soft delete
-      const { error } = await supabase
-        .from("trips")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", trip.id);
+      const { error } = await supabase.from("trips").update({ deleted_at: new Date().toISOString() }).eq("id", trip.id);
 
       if (error) throw error;
 
@@ -247,10 +242,7 @@ const TripDetail = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from("trips")
-        .update({ deleted_at: null })
-        .eq("id", trip.id);
+      const { error } = await supabase.from("trips").update({ deleted_at: null }).eq("id", trip.id);
 
       if (error) throw error;
 
@@ -276,19 +268,15 @@ const TripDetail = () => {
 
   const handlePriceModeToggle = async (mode: "exact" | "similar") => {
     try {
-      const { error } = await supabase
-        .from("trips")
-        .update({ price_mode: mode })
-        .eq("id", trip.id);
+      const { error } = await supabase.from("trips").update({ price_mode: mode }).eq("id", trip.id);
 
       if (error) throw error;
 
       setPriceMode(mode);
       toast({
         title: "Price mode updated",
-        description: mode === "exact" 
-          ? "Now checking for exact flights only"
-          : "Now checking similar flights on same route",
+        description:
+          mode === "exact" ? "Now checking for exact flights only" : "Now checking similar flights on same route",
       });
     } catch (error: any) {
       toast({
@@ -302,17 +290,19 @@ const TripDetail = () => {
   const handleCheckNow = async () => {
     setIsCheckingNow(true);
     try {
-      const { data, error } = await supabase.functions.invoke('check-now', {
+      const { data, error } = await supabase.functions.invoke("check-now", {
         body: { tripId: trip.id },
       });
 
       if (error) {
         // Check if it's a rate limit error
-        if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+        if (error.message?.includes("Rate limit") || error.message?.includes("429")) {
           // Try to extract retry time from the error
           const retryMatch = error.message.match(/(\d+)\s*minute/i);
           const retryMinutes = retryMatch ? parseInt(retryMatch[1]) : 10;
-          throw new Error(`Price checks are limited to once every 10 minutes. Please try again in ${retryMinutes} ${retryMinutes === 1 ? 'minute' : 'minutes'}.`);
+          throw new Error(
+            `Price checks are limited to once every 10 minutes. Please try again in ${retryMinutes} ${retryMinutes === 1 ? "minute" : "minutes"}.`,
+          );
         }
         throw error;
       }
@@ -323,11 +313,7 @@ const TripDetail = () => {
       }
 
       // Refresh trip data
-      const { data: tripData } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("id", trip.id)
-        .single();
+      const { data: tripData } = await supabase.from("trips").select("*").eq("id", trip.id).single();
 
       if (tripData) {
         setTrip(tripData);
@@ -335,7 +321,7 @@ const TripDetail = () => {
 
       toast({
         title: "Price check complete",
-        description: data.last_public_price 
+        description: data.last_public_price
           ? `Current price: $${data.last_public_price}`
           : "No pricing data available yet",
       });
@@ -403,9 +389,7 @@ const TripDetail = () => {
                 <div>
                   <AirlineBadge airline={trip.airline as AirlineKey} className="mb-2" />
                   <h2 className="text-xl font-bold">{route}</h2>
-                  <p className="text-sm text-muted-foreground font-mono">
-                    {trip.confirmation_code}
-                  </p>
+                  <p className="text-sm text-muted-foreground font-mono">{trip.confirmation_code}</p>
                 </div>
 
                 <div className="space-y-2 text-sm">
@@ -424,9 +408,7 @@ const TripDetail = () => {
 
                 <div>
                   <p className="text-sm font-medium mb-1">Fare:</p>
-                  <p className="text-sm text-muted-foreground">
-                    {trip.brand || "Not specified"}
-                  </p>
+                  <p className="text-sm text-muted-foreground">{trip.brand || "Not specified"}</p>
                 </div>
 
                 <EligibilityPill brand={trip.brand} />
@@ -442,12 +424,12 @@ const TripDetail = () => {
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Last checked:</span>
                     <span className="font-medium">
-                      {trip.last_checked_at 
+                      {trip.last_checked_at
                         ? formatDistanceToNow(new Date(trip.last_checked_at), { addSuffix: true })
                         : "Never"}
                     </span>
                   </div>
-                  
+
                   {trip.last_public_price && (
                     <>
                       <div className="flex items-center justify-between">
@@ -456,18 +438,16 @@ const TripDetail = () => {
                           <span className="font-medium">${trip.last_public_price.toFixed(2)}</span>
                           {trip.last_confidence && (
                             <Badge variant="outline" className="text-xs">
-                              {trip.last_confidence === 'exact-flight' ? 'Exact' : 'Estimate'}
+                              {trip.last_confidence === "exact-flight" ? "Exact" : "Estimate"}
                             </Badge>
                           )}
                         </div>
                       </div>
-                      
+
                       {trip.last_public_price < trip.paid_total && (
                         <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-3">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-green-800 dark:text-green-200 font-medium">
-                              Potential drop:
-                            </span>
+                            <span className="text-green-800 dark:text-green-200 font-medium">Potential drop:</span>
                             <span className="text-green-600 dark:text-green-400 font-bold">
                               ${(trip.paid_total - trip.last_public_price).toFixed(2)}
                             </span>
@@ -477,7 +457,7 @@ const TripDetail = () => {
                               size="sm"
                               variant="default"
                               className="w-full"
-                              onClick={() => window.open(bookingUrl, '_blank')}
+                              onClick={() => window.open(bookingUrl, "_blank")}
                             >
                               Book cheaper flight →
                             </Button>
@@ -545,11 +525,7 @@ const TripDetail = () => {
                         Auto-refresh (10s)
                       </Label>
                     </div>
-                    <Switch
-                      id="auto-refresh"
-                      checked={autoRefresh}
-                      onCheckedChange={setAutoRefresh}
-                    />
+                    <Switch id="auto-refresh" checked={autoRefresh} onCheckedChange={setAutoRefresh} />
                   </div>
                 </div>
               </CardContent>
@@ -565,15 +541,9 @@ const TripDetail = () => {
                     <Label htmlFor="monitoring" className="text-sm font-medium">
                       Email alerts every 3h
                     </Label>
-                    <p className="text-xs text-muted-foreground">
-                      We check public fares automatically
-                    </p>
+                    <p className="text-xs text-muted-foreground">We check public fares automatically</p>
                   </div>
-                  <Switch
-                    id="monitoring"
-                    checked={monitoringEnabled}
-                    onCheckedChange={handleMonitoringToggle}
-                  />
+                  <Switch id="monitoring" checked={monitoringEnabled} onCheckedChange={handleMonitoringToggle} />
                 </div>
 
                 {monitoringEnabled && (
@@ -593,9 +563,7 @@ const TripDetail = () => {
                         className="max-w-[120px]"
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Minimum savings to trigger an email
-                    </p>
+                    <p className="text-xs text-muted-foreground">Minimum savings to trigger an email</p>
                   </div>
                 )}
 
@@ -621,7 +589,7 @@ const TripDetail = () => {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {priceMode === "exact" 
+                      {priceMode === "exact"
                         ? "Only check your exact flight numbers"
                         : "Check any flights on same route & dates"}
                     </p>
@@ -659,9 +627,7 @@ const TripDetail = () => {
             <div>
               <div className="mb-4">
                 <h2 className="text-2xl font-bold mb-1">Guided Reprice</h2>
-                <p className="text-sm text-muted-foreground">
-                  Follow the steps to preview potential credit
-                </p>
+                <p className="text-sm text-muted-foreground">Follow the steps to preview potential credit</p>
               </div>
               <GuidedRepriceWizard trip={trip} />
             </div>
