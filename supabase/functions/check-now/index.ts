@@ -100,6 +100,7 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; currency: st
   }
 
   const payload: any = await res.json();
+  console.log("[AMADEUS RAW]", JSON.stringify(payload, null, 2));
   const offers: any[] = Array.isArray(payload?.data) ? payload.data : [];
   const first = offers[0];
   const total = first?.price?.grandTotal ? Number(first.price.grandTotal) : null;
