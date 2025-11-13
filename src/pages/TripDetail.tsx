@@ -40,27 +40,37 @@ import { logAudit } from "@/lib/audit";
 const TripDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+
   const [loading, setLoading] = useState(true);
   const [trip, setTrip] = useState<any>(null);
   const [segments, setSegments] = useState<any[]>([]);
   const [priceChecks, setPriceChecks] = useState<any[]>([]);
+
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [monitorThreshold, setMonitorThreshold] = useState(20);
   const [monitorFrequency, setMonitorFrequency] = useState<number | null>(null);
+
   const [priceMode, setPriceMode] = useState<"exact" | "similar">("similar");
+
   const [bookingUrl, setBookingUrl] = useState<string | null>(null);
+  const [googleFlightsUrl, setGoogleFlightsUrl] = useState<string | null>(null);
+  const [airlineBookingUrl, setAirlineBookingUrl] = useState<string | null>(null);
+
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCheckingNow, setIsCheckingNow] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
+
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Fetch trip + segments + price checks
   useEffect(() => {
     const fetchTrip = async () => {
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
+
         if (!user) {
           navigate("/auth");
           return;
@@ -83,19 +93,18 @@ const TripDetail = () => {
 
         if (segmentsError) throw segmentsError;
 
-        setTrip(tripData);
-        setSegments(segmentsData || []);
-        setMonitoringEnabled(tripData.monitoring_enabled ?? true);
-        setMonitorThreshold(tripData.monitor_threshold ?? 20);
-        setMonitorFrequency(tripData.monitor_frequency_minutes);
-        setPriceMode((tripData.price_mode === "exact" ? "exact" : "similar") as "exact" | "similar");
-
-        // Fetch price checks
         const { data: checksData, error: checksError } = await supabase
           .from("price_checks")
           .select("*")
           .eq("trip_id", id)
           .order("created_at", { ascending: true });
+
+        setTrip(tripData);
+        setSegments(segmentsData || []);
+        setMonitoringEnabled(tripData.monitoring_enabled ?? true);
+        setMonitorThreshold(tripData.monitor_threshold ?? 20);
+        setMonitorFrequency(tripData.monitor_frequency_minutes ?? null);
+        setPriceMode((tripData.price_mode === "exact" ? "exact" : "similar") as "exact" | "similar");
 
         if (!checksError && checksData) {
           setPriceChecks(checksData);
@@ -113,14 +122,13 @@ const TripDetail = () => {
     }
   }, [id, navigate]);
 
-  // Auto-refresh polling
+  // Auto-refresh polling of trip (for last_public_price, etc.)
   useEffect(() => {
     if (!autoRefresh || !id) return;
 
     const interval = setInterval(async () => {
       try {
         const { data: tripData } = await supabase.from("trips").select("*").eq("id", id).single();
-
         if (tripData) {
           setTrip(tripData);
         }
@@ -246,7 +254,6 @@ const TripDetail = () => {
 
       if (error) throw error;
 
-      // Log audit
       await logAudit("undo", trip.id, {
         airline: trip.airline,
         pnr: trip.confirmation_code,
@@ -295,33 +302,33 @@ const TripDetail = () => {
       });
 
       if (error) {
-        // Check if it's a rate limit error
+        // Rate limit / 429 handling
         if (error.message?.includes("Rate limit") || error.message?.includes("429")) {
-          // Try to extract retry time from the error
           const retryMatch = error.message.match(/(\d+)\s*minute/i);
           const retryMinutes = retryMatch ? parseInt(retryMatch[1]) : 10;
           throw new Error(
-            `Price checks are limited to once every 10 minutes. Please try again in ${retryMinutes} ${retryMinutes === 1 ? "minute" : "minutes"}.`,
+            `Price checks are limited to once every 10 minutes. Please try again in ${retryMinutes} ${
+              retryMinutes === 1 ? "minute" : "minutes"
+            }.`,
           );
         }
         throw error;
       }
 
-      // Store booking URL if returned
-      if (data.booking_url) {
-        setBookingUrl(data.booking_url);
-      }
+      // Deep-link URLs from edge function
+      setBookingUrl(data?.booking_url ?? null);
+      setGoogleFlightsUrl(data?.google_flights_url ?? null);
+      setAirlineBookingUrl(data?.airline_booking_url ?? null);
 
-      // Refresh trip data
+      // Refresh trip from DB (for last_public_price, last_confidence, etc.)
       const { data: tripData } = await supabase.from("trips").select("*").eq("id", trip.id).single();
-
       if (tripData) {
         setTrip(tripData);
       }
 
       toast({
         title: "Price check complete",
-        description: data.last_public_price
+        description: data?.last_public_price
           ? `Current price: $${data.last_public_price}`
           : "No pricing data available yet",
       });
@@ -379,7 +386,7 @@ const TripDetail = () => {
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left: Trip Summary */}
+          {/* Left: Trip Summary + Controls */}
           <div className="lg:col-span-1 space-y-4">
             <Card>
               <CardHeader>
@@ -452,17 +459,42 @@ const TripDetail = () => {
                               ${(trip.paid_total - trip.last_public_price).toFixed(2)}
                             </span>
                           </div>
-                          {bookingUrl && (
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="w-full"
-                              onClick={() => window.open(bookingUrl, "_blank")}
-                            >
-                              {bookingUrl.includes("google.com/flights")
-                                ? "View on Google Flights →"
-                                : "Book on Airline →"}
-                            </Button>
+
+                          {(airlineBookingUrl || googleFlightsUrl || bookingUrl) && (
+                            <div className="flex flex-col gap-2">
+                              {airlineBookingUrl && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="w-full"
+                                  onClick={() => window.open(airlineBookingUrl, "_blank")}
+                                >
+                                  Book on Airline →
+                                </Button>
+                              )}
+                              {googleFlightsUrl && (
+                                <Button
+                                  size="sm"
+                                  variant={airlineBookingUrl ? "outline" : "default"}
+                                  className="w-full"
+                                  onClick={() => window.open(googleFlightsUrl, "_blank")}
+                                >
+                                  View on Google Flights →
+                                </Button>
+                              )}
+                              {!airlineBookingUrl && !googleFlightsUrl && bookingUrl && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  className="w-full"
+                                  onClick={() => window.open(bookingUrl, "_blank")}
+                                >
+                                  {bookingUrl.includes("google.com/flights")
+                                    ? "View on Google Flights →"
+                                    : "Book on Airline →"}
+                                </Button>
+                              )}
+                            </div>
                           )}
                         </div>
                       )}
@@ -606,7 +638,7 @@ const TripDetail = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {segments.map((seg, i) => (
+                  {segments.map((seg) => (
                     <div key={seg.id} className="text-sm">
                       <div className="font-medium">
                         {seg.carrier} {seg.flight_number}
