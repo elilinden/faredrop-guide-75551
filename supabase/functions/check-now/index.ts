@@ -34,13 +34,23 @@ function missingForPricing(trip: any) {
 }
 
 function mapTrip(trip: any) {
+  // Map cabin class to Amadeus-accepted values
+  const cabinMap: Record<string, string> = {
+    'economy': 'ECONOMY',
+    'premium_economy': 'PREMIUM_ECONOMY',
+    'business': 'BUSINESS',
+    'first': 'FIRST',
+  };
+  
+  const cabin = trip.cabin ? cabinMap[trip.cabin.toLowerCase()] : undefined;
+  
   return {
     origin: trip.origin_iata,
     destination: trip.destination_iata,
     departureDate: trip.depart_date,
     returnDate: trip.return_date,
     adults: trip.adults || 1,
-    cabin: trip.cabin || undefined,
+    cabin,
   };
 }
 
