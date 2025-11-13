@@ -15,26 +15,11 @@ const corsHeaders = {
 };
 
 function error(status: number, message: string) {
-return new Response(
-  JSON.stringify({
-    ok: true,
-    observed_price: publicFare?.price ?? null,
-    last_public_price: update.last_public_price ?? null,
-    last_confidence: update.last_confidence ?? null,
-
-    // ✅ primary button uses airline when possible, otherwise Google Flights
-    booking_url: airlineLink || google,
-
-    // ✅ explicit links for UI
-    google_flights_url: google,
-    airline_booking_url: airlineLink,
-
-    message: publicFare
-      ? "Price check complete."
-      : "Price check complete. No pricing data available yet.",
-  }),
-  { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-);
+  return new Response(
+    JSON.stringify({ ok: false, error: message }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
 
 
 /* -----------------------------------------------------------
@@ -170,7 +155,7 @@ type BookingUrls = {
 
 function buildBookingUrls(trip: any): BookingUrls {
   // Reuse the same logic you use for pricing so origin/dates stay in sync
-  const { origin, destination, departureDate, returnDate, adults } = mapTripToSearchParams(trip);
+  const { origin, destination, departureDate, returnDate, adults } = mapTrip(trip);
 
   if (!origin || !destination || !departureDate) {
     return { google: null, airlineLink: null };
