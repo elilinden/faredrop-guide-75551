@@ -147,46 +147,73 @@ async function fetchPublicFare(trip: any) {
    BOOKING / DEEP-LINK GENERATOR
 ----------------------------------------------------------- */
 
-function buildBookingUrls(trip: any) {
-  const origin = trip.origin_iata;
-  const dest = trip.destination_iata;
-  const depart = trip.depart_date;
-  const ret = trip.return_date;
-  const adults = trip.adults || 1;
+type BookingUrls = {
+  google: string | null;
+  airlineLink: string | null;
+};
 
-  const google = `https://www.google.com/travel/flights?q=Flights%20from%20${origin}%20to%20${dest}%20on%20${depart}`;
+function buildBookingUrls(trip: any): BookingUrls {
+  // Reuse the same logic you use for pricing so origin/dates stay in sync
+  const { origin, destination, departureDate, returnDate, adults } = mapTripToSearchParams(trip);
 
-  let airlineLink = null;
+  if (!origin || !destination || !departureDate) {
+    return { google: null, airlineLink: null };
+  }
 
-  switch (trip.airline?.toUpperCase()) {
-    case "DL":
+  const from = String(origin).toUpperCase();
+  const to = String(destination).toUpperCase();
+  const depart = departureDate;
+  const ret = returnDate || null;
+  const pax = adults ?? 1;
+
+  // Google Flights query – nice and generic, so Google can figure it out
+  const googleQuery = `Flights from ${from} to ${to} on ${depart}`;
+  const google = `https://www.google.com/travel/flights?q=${encodeURIComponent(googleQuery)}`;
+
+  let airlineLink: string | null = null;
+  const airline = (trip.airline || "").toUpperCase();
+
+  switch (airline) {
+    case "DL": {
+      const tripType = ret ? "ROUND_TRIP" : "ONE_WAY";
       airlineLink =
-        `https://www.delta.com/flight-search/search?tripType=${ret ? "ROUND_TRIP" : "ONE_WAY"}` +
-        `&originCity=${origin}&destinationCity=${dest}&departureDate=${depart}` +
+        `https://www.delta.com/flight-search/search?tripType=${tripType}` +
+        `&originCity=${from}&destinationCity=${to}&departureDate=${depart}` +
         (ret ? `&returnDate=${ret}` : "") +
-        `&adults=${adults}&cabinMain=true`;
+        `&adults=${pax}&cabinMain=true`;
       break;
+    }
 
-    case "AA":
+    case "AA": {
       airlineLink =
-        `https://www.aa.com/booking/search?originCity=${origin}&destinationCity=${dest}&departureDate=${depart}` +
+        `https://www.aa.com/booking/search?originCity=${from}` +
+        `&destinationCity=${to}&departureDate=${depart}` +
         (ret ? `&returnDate=${ret}` : "") +
-        `&passengers=${adults}`;
+        `&passengers=${pax}`;
       break;
+    }
 
-    case "UA":
+    case "UA": {
       airlineLink =
-        `https://www.united.com/en/us/fsr/choose-flights?f=${origin}&t=${dest}&d=${depart}` +
+        `https://www.united.com/en/us/fsr/choose-flights?f=${from}` +
+        `&t=${to}&d=${depart}` +
         (ret ? `&r=${ret}` : "") +
-        `&px=${adults}`;
+        `&px=${pax}&cabin=econ`;
       break;
+    }
 
-    case "AS":
+    case "AS": {
       airlineLink =
-        `https://www.alaskaair.com/booking/search?from=${origin}&to=${dest}&departureDate=${depart}` +
+        `https://www.alaskaair.com/booking/search?from=${from}` +
+        `&to=${to}&departureDate=${depart}` +
         (ret ? `&returnDate=${ret}` : "") +
-        `&numAdults=${adults}`;
+        `&numAdults=${pax}`;
       break;
+    }
+
+    default: {
+      airlineLink = null;
+    }
   }
 
   return { google, airlineLink };

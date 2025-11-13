@@ -459,7 +459,9 @@ const TripDetail = () => {
                               className="w-full"
                               onClick={() => window.open(bookingUrl, "_blank")}
                             >
-                              Book cheaper flight →
+                              {bookingUrl.includes("google.com/flights")
+                                ? "View on Google Flights →"
+                                : "Book on Airline →"}
                             </Button>
                           )}
                         </div>
