@@ -153,28 +153,32 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return error(405, "Use POST");
 
-    const auth = req.headers.get("Authorization") ?? "";
+    const authHeader = req.headers.get("Authorization") ?? "";
     const body = await req.json().catch(() => ({}));
     const { tripId } = body as { tripId?: string };
 
     if (!tripId) return error(400, "Missing tripId");
 
-    // Service client with the caller's JWT attached for user identity check
-    const supabase = createClient(supabaseUrl, serviceKey, {
-      global: {
-        headers: {
-          Authorization: `Bearer ${serviceKey}`,
-          "x-user-jwt": auth.replace("Bearer ", ""), // pass the user’s JWT *separately*
-        },
-      },
-    });
+    // Get JWT from Authorization header
+    const jwt = authHeader.replace("Bearer ", "");
+    
+    if (!jwt) {
+      console.error("[check-now] Missing JWT token");
+      return error(401, "Missing authorization token");
+    }
 
-    // Identify the caller
-    const userJwt = req.headers.get("Authorization")?.replace("Bearer ", "") || "";
-    const { data: authData } = await createClient(supabaseUrl, userJwt || serviceKey).auth.getUser();
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, serviceKey);
 
-    const userId = authData?.user?.id;
-    if (!userId) return error(401, "Not authenticated");
+    // Verify user authentication with JWT
+    const { data: { user }, error: authError } = await supabase.auth.getUser(jwt);
+
+    if (authError || !user) {
+      console.error("[check-now] Auth error:", authError);
+      return error(401, "Not authenticated");
+    }
+
+    const userId = user.id;
 
     // Load trip + segments (and ensure ownership)
     const { data: trip, error: tripErr } = await supabase
