@@ -63,10 +63,7 @@ const baseTripFormSchema = z.object({
   notes: z.string().optional(),
 });
 
-const tripFormSchema = baseTripFormSchema.refine(
-  (v) => !(v.airline === "AA" || v.airline === "DL") || (!!v.first_name && v.first_name.length > 0),
-  { path: ["first_name"], message: "First name required for this airline" }
-);
+const tripFormSchema = baseTripFormSchema;
 
 type TripFormData = z.infer<typeof tripFormSchema>;
 
@@ -453,12 +450,7 @@ const TripNew = () => {
               </div>
 
               <div>
-                <Label htmlFor="first_name">
-                  First Name
-                  {(selectedAirline === "AA" || selectedAirline === "DL") && (
-                    <span className="text-destructive ml-1">*</span>
-                  )}
-                </Label>
+                <Label htmlFor="first_name">First Name (optional)</Label>
                 <Controller
                   name="first_name"
                   control={control}
@@ -469,7 +461,7 @@ const TripNew = () => {
                 )}
                 {(selectedAirline === "AA" || selectedAirline === "DL") && !watch("first_name") && (
                   <p className="text-xs text-muted-foreground mt-1">
-                    ⚠️ Required for {selectedAirline === "AA" ? "American" : "Delta"}
+                    Helpful for {selectedAirline === "AA" ? "American" : "Delta"} (occasionally requested during repricing)
                   </p>
                 )}
               </div>
