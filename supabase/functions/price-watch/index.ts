@@ -5,12 +5,49 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const resendApiKey = Deno.env.get('RESEND_API_KEY');
 const appBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://faredrop.lovable.app';
+const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
 
 const AMADEUS_ENV = (Deno.env.get("AMADEUS_ENV") || "test") === "production" ? "production" : "test";
 const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com";
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
+// HMAC signature verification for webhook security
+async function verifyWebhookSignature(request: Request, body: string): Promise<boolean> {
+  if (!webhookSecret) {
+    console.warn('WEBHOOK_SECRET not configured - skipping signature verification');
+    return true; // Allow if secret not configured (for backwards compatibility)
+  }
+
+  const signature = request.headers.get('X-Webhook-Signature');
+  if (!signature) {
+    console.error('Missing X-Webhook-Signature header');
+    return false;
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(webhookSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const expectedSignature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(body)
+  );
+
+  const expectedHex = Array.from(new Uint8Array(expectedSignature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // Timing-safe comparison
+  return signature === expectedHex;
+}
 
 function missingForPricing(trip: any) {
   const miss: string[] = [];
@@ -362,6 +399,18 @@ async function checkTrip(trip: any, userPrefs: any) {
 
 Deno.serve(async (req) => {
   console.log('[price-watch] Starting scheduled check');
+
+  // Verify webhook signature
+  const requestBody = await req.text();
+  const isValid = await verifyWebhookSignature(req, requestBody);
+  
+  if (!isValid) {
+    console.error('Invalid webhook signature');
+    return new Response(
+      JSON.stringify({ error: 'Invalid signature' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 
   try {
     // Fetch active trips with monitoring enabled, including segments

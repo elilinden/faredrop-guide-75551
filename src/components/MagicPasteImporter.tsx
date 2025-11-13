@@ -45,7 +45,7 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ text: rawText, upsert: false }),
+        body: JSON.stringify({ text: rawText }),
       });
 
       const data = await response.json();

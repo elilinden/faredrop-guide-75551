@@ -6,9 +6,59 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
+
+// HMAC signature verification for webhook security
+async function verifyWebhookSignature(request: Request, body: string): Promise<boolean> {
+  if (!webhookSecret) {
+    console.warn('WEBHOOK_SECRET not configured - skipping signature verification');
+    return true; // Allow if secret not configured (for backwards compatibility)
+  }
+
+  const signature = request.headers.get('X-Webhook-Signature');
+  if (!signature) {
+    console.error('Missing X-Webhook-Signature header');
+    return false;
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(webhookSecret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const expectedSignature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(body)
+  );
+
+  const expectedHex = Array.from(new Uint8Array(expectedSignature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // Timing-safe comparison
+  return signature === expectedHex;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Verify webhook signature
+  const requestBody = await req.text();
+  const isValid = await verifyWebhookSignature(req, requestBody);
+  
+  if (!isValid) {
+    console.error('Invalid webhook signature');
+    return new Response(
+      JSON.stringify({ error: 'Invalid signature' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
