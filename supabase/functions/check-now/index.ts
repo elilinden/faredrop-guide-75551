@@ -212,6 +212,8 @@ function buildBookingUrls(trip: any): BookingUrls {
   googleUrl.searchParams.set("gl", "US");
   googleUrl.hash = `flt=${googleFltSegments.join("*")};px:${paxCount}`;
   const google = googleUrl.toString();
+  const googlePassengerSuffix = `;px:${paxCount}`;
+  const google = `https://www.google.com/travel/flights?hl=en#flt=${googleFltSegments.join("*")}${googlePassengerSuffix}`;
 
   let airlineLink: string | null = null;
   const airline = (trip.airline || "").toUpperCase();
