@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,7 @@ import { logAudit } from "@/lib/audit";
 const TripDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [loading, setLoading] = useState(true);
   const [trip, setTrip] = useState<any>(null);
@@ -64,63 +65,64 @@ const TripDetail = () => {
   const undoTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch trip + segments + price checks
-  useEffect(() => {
-    const fetchTrip = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+  const fetchTrip = async () => {
+    setLoading(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-        if (!user) {
-          navigate("/auth");
-          return;
-        }
-
-        const { data: tripData, error: tripError } = await supabase
-          .from("trips")
-          .select("*")
-          .eq("id", id)
-          .eq("user_id", user.id)
-          .single();
-
-        if (tripError) throw tripError;
-
-        const { data: segmentsData, error: segmentsError } = await supabase
-          .from("segments")
-          .select("*")
-          .eq("trip_id", id)
-          .order("depart_datetime", { ascending: true });
-
-        if (segmentsError) throw segmentsError;
-
-        const { data: checksData, error: checksError } = await supabase
-          .from("price_checks")
-          .select("*")
-          .eq("trip_id", id)
-          .order("created_at", { ascending: true });
-
-        setTrip(tripData);
-        setSegments(segmentsData || []);
-        setMonitoringEnabled(tripData.monitoring_enabled ?? true);
-        setMonitorThreshold(tripData.monitor_threshold ?? 20);
-        setMonitorFrequency(tripData.monitor_frequency_minutes ?? null);
-        setPriceMode((tripData.price_mode === "exact" ? "exact" : "similar") as "exact" | "similar");
-
-        if (!checksError && checksData) {
-          setPriceChecks(checksData);
-        }
-      } catch (error) {
-        console.error("Error fetching trip:", error);
-        navigate("/dashboard");
-      } finally {
-        setLoading(false);
+      if (!user) {
+        navigate("/auth");
+        return;
       }
-    };
 
+      const { data: tripData, error: tripError } = await supabase
+        .from("trips")
+        .select("*")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
+
+      if (tripError) throw tripError;
+
+      const { data: segmentsData, error: segmentsError } = await supabase
+        .from("segments")
+        .select("*")
+        .eq("trip_id", id)
+        .order("depart_datetime", { ascending: true });
+
+      if (segmentsError) throw segmentsError;
+
+      const { data: checksData, error: checksError } = await supabase
+        .from("price_checks")
+        .select("*")
+        .eq("trip_id", id)
+        .order("created_at", { ascending: true });
+
+      setTrip(tripData);
+      setSegments(segmentsData || []);
+      setMonitoringEnabled(tripData.monitoring_enabled ?? true);
+      setMonitorThreshold(tripData.monitor_threshold ?? 20);
+      setMonitorFrequency(tripData.monitor_frequency_minutes ?? null);
+      setPriceMode((tripData.price_mode === "exact" ? "exact" : "similar") as "exact" | "similar");
+
+      if (!checksError && checksData) {
+        setPriceChecks(checksData);
+      }
+    } catch (error) {
+      console.error("Error fetching trip:", error);
+      navigate("/dashboard");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (id) {
       fetchTrip();
     }
-  }, [id, navigate]);
+  }, [id, navigate, location.state]);
 
   // Auto-refresh polling of trip (for last_public_price, etc.)
   useEffect(() => {

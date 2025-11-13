@@ -251,7 +251,7 @@ const TripEdit = () => {
         description: "Your changes have been saved.",
       });
 
-      navigate(`/trips/${id}`);
+      navigate(`/trips/${id}`, { state: { refetch: true } });
     } catch (error) {
       console.error("Error updating trip:", error);
       toast({
