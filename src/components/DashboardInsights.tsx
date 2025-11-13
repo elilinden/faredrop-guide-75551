@@ -1,11 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingDown, Bell, Calendar, DollarSign } from "lucide-react";
+import { TrendingDown, Bell, Calendar } from "lucide-react";
 
 interface DashboardInsightsProps {
   tripsAddedThisWeek: number;
   activeMonitors: number;
   potentialSavings: number;
-  avgPriceChange: number;
 }
 
 export const DashboardInsights = ({
@@ -16,6 +16,9 @@ export const DashboardInsights = ({
 }: DashboardInsightsProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+}: DashboardInsightsProps) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
       <Card>
         <CardContent className="p-6">
           <div className="flex items-center gap-4">
