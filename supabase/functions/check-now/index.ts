@@ -15,12 +15,11 @@ const corsHeaders = {
 };
 
 function error(status: number, message: string) {
-  return new Response(
-    JSON.stringify({ ok: false, error: message }),
-    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+  return new Response(JSON.stringify({ ok: false, error: message }), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
-
 
 /* -----------------------------------------------------------
    FIELD VALIDATION & NORMALIZATION
@@ -290,7 +289,8 @@ Deno.serve(async (req) => {
         observed_price: fare?.price ?? null,
         last_public_price: update.last_public_price ?? null,
         last_confidence: update.last_confidence ?? null,
-        google_flights: google,
+        booking_url: airlineLink || google,
+        google_flights_url: google,
         airline_booking_url: airlineLink,
         message: fare ? "Price check complete." : "No fares found.",
       }),
