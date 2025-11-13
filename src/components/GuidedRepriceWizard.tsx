@@ -193,7 +193,9 @@ export const GuidedRepriceWizard = ({
 
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-6">
-        {[1, 2, 3, 4].map(s => {})}
+        {[1, 2, 3, 4].map(s => (
+          <div key={s} className={`h-2 w-full rounded ${s <= step ? 'bg-primary' : 'bg-muted'}`} />
+        ))}
       </div>
 
       {/* Step 1: Prep */}
