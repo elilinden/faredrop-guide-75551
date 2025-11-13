@@ -189,10 +189,7 @@ export const GuidedRepriceWizard = ({
   };
   return <div className="space-y-4">
       {/* --- NEW: Price Watch panel --- */}
-      <Card>
-        
-        
-      </Card>
+      
 
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-6">
