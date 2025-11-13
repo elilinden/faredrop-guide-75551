@@ -36,6 +36,8 @@ const TripDetail = () => {
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [monitorThreshold, setMonitorThreshold] = useState(20);
   const [monitorFrequency, setMonitorFrequency] = useState<number | null>(null);
+  const [priceMode, setPriceMode] = useState<"exact" | "similar">("similar");
+  const [bookingUrl, setBookingUrl] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCheckingNow, setIsCheckingNow] = useState(false);
@@ -73,6 +75,7 @@ const TripDetail = () => {
         setMonitoringEnabled(tripData.monitoring_enabled ?? true);
         setMonitorThreshold(tripData.monitor_threshold ?? 20);
         setMonitorFrequency(tripData.monitor_frequency_minutes);
+        setPriceMode((tripData.price_mode === "exact" ? "exact" : "similar") as "exact" | "similar");
 
         // Fetch price checks
         const { data: checksData, error: checksError } = await supabase
@@ -271,6 +274,31 @@ const TripDetail = () => {
     }
   };
 
+  const handlePriceModeToggle = async (mode: "exact" | "similar") => {
+    try {
+      const { error } = await supabase
+        .from("trips")
+        .update({ price_mode: mode })
+        .eq("id", trip.id);
+
+      if (error) throw error;
+
+      setPriceMode(mode);
+      toast({
+        title: "Price mode updated",
+        description: mode === "exact" 
+          ? "Now checking for exact flights only"
+          : "Now checking similar flights on same route",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Failed to update price mode",
+        description: error.message,
+      });
+    }
+  };
+
   const handleCheckNow = async () => {
     setIsCheckingNow(true);
     try {
@@ -287,6 +315,11 @@ const TripDetail = () => {
           throw new Error(`Price checks are limited to once every 10 minutes. Please try again in ${retryMinutes} ${retryMinutes === 1 ? 'minute' : 'minutes'}.`);
         }
         throw error;
+      }
+
+      // Store booking URL if returned
+      if (data.booking_url) {
+        setBookingUrl(data.booking_url);
       }
 
       // Refresh trip data
@@ -431,7 +464,7 @@ const TripDetail = () => {
                       
                       {trip.last_public_price < trip.paid_total && (
                         <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md p-3">
-                          <div className="flex items-center justify-between">
+                          <div className="flex items-center justify-between mb-2">
                             <span className="text-green-800 dark:text-green-200 font-medium">
                               Potential drop:
                             </span>
@@ -439,6 +472,16 @@ const TripDetail = () => {
                               ${(trip.paid_total - trip.last_public_price).toFixed(2)}
                             </span>
                           </div>
+                          {bookingUrl && (
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="w-full"
+                              onClick={() => window.open(bookingUrl, '_blank')}
+                            >
+                              Book cheaper flight →
+                            </Button>
+                          )}
                         </div>
                       )}
                     </>
@@ -552,6 +595,35 @@ const TripDetail = () => {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Minimum savings to trigger an email
+                    </p>
+                  </div>
+                )}
+
+                {monitoringEnabled && (
+                  <div className="space-y-2 pt-2 border-t">
+                    <Label className="text-sm font-medium">Price check mode</Label>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={priceMode === "similar" ? "default" : "outline"}
+                        onClick={() => handlePriceModeToggle("similar")}
+                        className="flex-1 text-xs"
+                      >
+                        Similar flights
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={priceMode === "exact" ? "default" : "outline"}
+                        onClick={() => handlePriceModeToggle("exact")}
+                        className="flex-1 text-xs"
+                      >
+                        Exact only
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {priceMode === "exact" 
+                        ? "Only check your exact flight numbers"
+                        : "Check any flights on same route & dates"}
                     </p>
                   </div>
                 )}

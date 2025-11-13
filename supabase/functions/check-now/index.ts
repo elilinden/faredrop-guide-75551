@@ -108,6 +108,35 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; currency: st
 
   if (!total) return null;
 
+  const exactMode = trip.price_mode === "exact";
+
+  if (exactMode && trip.segments?.length > 0) {
+    // Exact mode: require same carrier + flight number
+    const matches = offers.filter((off: any) => {
+      const segs = off.itineraries?.flatMap((i: any) => i.segments) || [];
+      
+      if (segs.length !== trip.segments.length) return false;
+      
+      return segs.every((seg: any, idx: number) => {
+        const orig = trip.segments[idx];
+        return (
+          seg.carrierCode === orig.carrier &&
+          seg.number === String(orig.flight_number)
+        );
+      });
+    });
+
+    if (matches.length === 0) return null;
+
+    const best = matches[0];
+    return {
+      price: Number(best.price.grandTotal),
+      currency: best.price.currency || "USD",
+      confidence: "exact-flight",
+    };
+  }
+
+  // Similar mode: route-estimate
   const hasExact =
     trip.segments?.length > 0 &&
     trip.segments.every((s: any) => s.carrier && s.flight_number && s.depart_airport && s.arrive_airport);
@@ -141,8 +170,8 @@ Deno.serve(async (req) => {
     });
 
     // Identify the caller
-    const userJwt = req.headers.get("Authorization")?.replace("Bearer ", "");
-    const { data: authData } = await createClient(supabaseUrl, userJwt).auth.getUser();
+    const userJwt = req.headers.get("Authorization")?.replace("Bearer ", "") || "";
+    const { data: authData } = await createClient(supabaseUrl, userJwt || serviceKey).auth.getUser();
 
     const userId = authData?.user?.id;
     if (!userId) return error(401, "Not authenticated");
@@ -171,6 +200,29 @@ Deno.serve(async (req) => {
     // Fetch public fare
     const publicFare = await fetchPublicFare(trip);
 
+    // Generate booking URL for deep-linking
+    let bookingUrl: string | null = null;
+    if (trip.origin_iata && trip.destination_iata && trip.departure_date) {
+      const airline = trip.airline?.toUpperCase();
+      const origin = trip.origin_iata;
+      const destination = trip.destination_iata;
+      const departureDate = trip.departure_date;
+      const returnDate = trip.return_date;
+      const adults = trip.adults || 1;
+      
+      // Generate airline-specific booking URLs
+      if (airline === "DL") {
+        const tripType = returnDate ? "ROUND_TRIP" : "ONE_WAY";
+        bookingUrl = `https://www.delta.com/flight-search/search?tripType=${tripType}&originCity=${origin}&destinationCity=${destination}&departureDate=${departureDate}${returnDate ? `&returnDate=${returnDate}` : ""}&cabinMain=true&adults=${adults}`;
+      } else if (airline === "UA") {
+        bookingUrl = `https://www.united.com/en/us/fsr/choose-flights?f=${origin}&t=${destination}&d=${departureDate}${returnDate ? `&r=${returnDate}` : ""}&px=${adults}&cabin=econ`;
+      } else if (airline === "AA") {
+        bookingUrl = `https://www.aa.com/booking/search?locale=en_US&originCity=${origin}&destinationCity=${destination}&departureDate=${departureDate}${returnDate ? `&returnDate=${returnDate}` : ""}&passengers=${adults}`;
+      } else if (airline === "AS") {
+        bookingUrl = `https://www.alaskaair.com/booking/search?from=${origin}&to=${destination}&departureDate=${departureDate}${returnDate ? `&returnDate=${returnDate}` : ""}&numAdults=${adults}`;
+      }
+    }
+
     // Always set last_checked_at / next_check_at
     const now = new Date();
     const update: any = { last_checked_at: now.toISOString() };
@@ -198,6 +250,7 @@ Deno.serve(async (req) => {
         observed_price: publicFare?.price ?? null,
         last_public_price: update.last_public_price ?? null,
         last_confidence: update.last_confidence ?? null,
+        booking_url: bookingUrl,
         message: publicFare ? "Price check complete." : "Price check complete. No pricing data available yet.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

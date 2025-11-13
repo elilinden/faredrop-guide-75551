@@ -286,6 +286,7 @@ export type Database = {
           notes: string | null
           origin_iata: string | null
           paid_total: number
+          price_mode: string | null
           rbd: string | null
           return_date: string | null
           status: string
@@ -322,6 +323,7 @@ export type Database = {
           notes?: string | null
           origin_iata?: string | null
           paid_total: number
+          price_mode?: string | null
           rbd?: string | null
           return_date?: string | null
           status?: string
@@ -358,6 +360,7 @@ export type Database = {
           notes?: string | null
           origin_iata?: string | null
           paid_total?: number
+          price_mode?: string | null
           rbd?: string | null
           return_date?: string | null
           status?: string
