@@ -20,7 +20,7 @@ import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { DeleteTripDialog } from "@/components/DeleteTripDialog";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock, AlertTriangle } from "lucide-react";
+import { Plane, Calendar, DollarSign, ArrowLeft, MoreVertical, Trash2, RefreshCw, Clock, AlertTriangle, Pencil } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
@@ -344,6 +344,10 @@ const TripDetail = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate(`/trips/${id}/edit`)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit trip
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setDeleteDialogOpen(true)}
                 className="text-destructive focus:text-destructive"

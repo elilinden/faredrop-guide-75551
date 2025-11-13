@@ -235,11 +235,9 @@ const TripNew = () => {
         destination_iata = lastSeg.arrive_airport || null;
         
         if (firstSeg.depart_datetime) {
-          departure_date = firstSeg.depart_datetime.split('T')[0]; // Extract YYYY-MM-DD
+          departure_date = firstSeg.depart_datetime.split('T')[0];
         }
         
-        // For round trips, use the LAST segment's DEPARTURE date as the return date
-        // (not arrival, which can be parsed incorrectly)
         if (segments.length > 1 && lastSeg.depart_datetime) {
           return_date = lastSeg.depart_datetime.split('T')[0];
         }
@@ -248,15 +246,6 @@ const TripNew = () => {
           .filter(seg => seg.flight_number)
           .map(seg => `${seg.carrier}${seg.flight_number}`);
       }
-
-      console.log('[TripNew] Saving trip with extracted data:', {
-        origin_iata,
-        destination_iata,
-        departure_date,
-        return_date,
-        flight_numbers,
-        segments: segments.length
-      });
 
       // Insert trip
       const { data: tripData, error: tripError } = await supabase
@@ -279,7 +268,7 @@ const TripNew = () => {
           flight_numbers,
           adults: 1,
           cabin: data.brand || 'ECONOMY',
-          depart_date: departure_date, // Legacy field
+          depart_date: departure_date,
           currency: "USD",
           status: "active",
         })
@@ -287,15 +276,13 @@ const TripNew = () => {
         .single();
 
       if (tripError) {
-        // Check if it's a duplicate trip error
         if (tripError.code === '23505' && tripError.message.includes('trips_user_airline_pnr_last_uq')) {
           toast({
             title: "Trip already exists",
-            description: "You already have this trip saved. Redirecting to your trips...",
+            description: "You already have this trip saved. Redirecting...",
             variant: "default",
           });
           
-          // Find and navigate to the existing trip
           const { data: existingTrip } = await supabase
             .from('trips')
             .select('id')
@@ -304,7 +291,7 @@ const TripNew = () => {
             .eq('confirmation_code', data.confirmation_code.toUpperCase())
             .eq('last_name', data.last_name)
             .single();
-            
+              
           if (existingTrip) {
             navigate(`/trips/${existingTrip.id}`);
           } else {
@@ -315,7 +302,7 @@ const TripNew = () => {
         throw tripError;
       }
 
-      // Insert segments if any
+      // Insert segments
       if (segments.length > 0) {
         const validSegments = segments.filter(
           (seg) =>
@@ -324,10 +311,7 @@ const TripNew = () => {
             seg.depart_airport &&
             seg.arrive_airport &&
             seg.depart_datetime
-            // arrive_datetime is optional - not always available from confirmations
         );
-
-        console.log('[TripNew] Filtered valid segments:', validSegments.length, 'out of', segments.length);
 
         if (validSegments.length > 0) {
           const { error: segmentsError } = await supabase.from("segments").insert(
@@ -338,22 +322,14 @@ const TripNew = () => {
               depart_airport: seg.depart_airport!.toUpperCase(),
               arrive_airport: seg.arrive_airport!.toUpperCase(),
               depart_datetime: seg.depart_datetime!,
-              arrive_datetime: seg.arrive_datetime || seg.depart_datetime!, // Use depart if arrive not provided
+              arrive_datetime: seg.arrive_datetime || seg.depart_datetime!,
             }))
           );
 
-          if (segmentsError) {
-            console.error('[TripNew] Segments insert error:', segmentsError);
-            throw segmentsError;
-          }
-          
-          console.log('[TripNew] Successfully inserted', validSegments.length, 'segments');
-        } else {
-          console.warn('[TripNew] No valid segments to insert');
+          if (segmentsError) throw segmentsError;
         }
       }
 
-      // Log audit
       await logAudit("create", tripData.id, {
         airline: tripData.airline,
         pnr: tripData.confirmation_code,
@@ -405,11 +381,11 @@ const TripNew = () => {
 
           <TabsContent value="form">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Required Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Required Info</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="airline">Airline</Label>
                 <Controller
