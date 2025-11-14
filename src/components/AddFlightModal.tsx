@@ -40,9 +40,11 @@ interface LookupResult {
   flights: FlightSegment[];
   tripType?: string;
   destination?: string;
+  departureDate?: string;
   ticketExpiration?: string;
   fullRoute?: string;
   totalDuration?: string;
+  passengerName?: string;
   loyaltyStatus?: string;
   fareClass?: string;
   eticketNumber?: string;
@@ -135,73 +137,137 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
       const airlineConfig = airlines.find(a => a.value === formData.airline);
       const airlineCode = airlineConfig?.code || formData.airline.toUpperCase();
 
-      // Step 3: Create the trip in the database
+      // Step 3: Check if trip already exists, then create or update
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error("Not authenticated");
       }
 
-      const { data: tripData, error: tripError } = await supabase
+      // Check for existing trip with this confirmation code
+      const { data: existingTrip } = await supabase
         .from("trips")
-        .insert({
-          user_id: session.user.id,
-          airline: airlineCode,
-          confirmation_code: formData.confirmationCode.toUpperCase(),
-          first_name: formData.firstName.toUpperCase() || null,
-          last_name: formData.lastName.toUpperCase(),
-          paid_total: parseFloat(formData.flightCost),
-          status: "active",
-          monitoring_enabled: true,
-          trip_type: result.tripType || null,
-          ticket_expiration: result.ticketExpiration || null,
-          full_route: result.fullRoute || null,
-          total_duration_minutes: result.totalDuration ? parseInt(result.totalDuration) : null,
-          loyalty_status: result.loyaltyStatus || null,
-          fare_class: result.fareClass || null,
-          eticket_number: result.eticketNumber || null,
-          is_refundable: result.isRefundable || false,
-          destination_iata: result.destination || null,
-        })
-        .select()
-        .single();
+        .select("id")
+        .eq("user_id", session.user.id)
+        .eq("confirmation_code", formData.confirmationCode.toUpperCase())
+        .maybeSingle();
 
-      if (tripError) {
-        throw new Error(tripError.message);
+      let tripId: string;
+
+      if (existingTrip) {
+        console.log("[AddFlight] Trip exists, cleaning up old segments...");
+        tripId = existingTrip.id;
+
+        // Delete old junk segments
+        await supabase
+          .from("segments")
+          .delete()
+          .eq("trip_id", tripId)
+          .or("flight_number.eq.TBD,flight_number.is.null,depart_datetime.is.null");
+
+        // Update the trip with new data
+        const { error: updateError } = await supabase
+          .from("trips")
+          .update({
+            airline: airlineCode,
+            first_name: formData.firstName.toUpperCase() || null,
+            last_name: formData.lastName.toUpperCase(),
+            paid_total: parseFloat(formData.flightCost),
+            trip_type: result.tripType || null,
+            destination_iata: result.destination || null,
+            departure_date: result.departureDate || null,
+            ticket_expiration: result.ticketExpiration || null,
+            full_route: result.fullRoute || null,
+            total_duration_minutes: result.totalDuration ? parseInt(result.totalDuration) : null,
+            loyalty_status: result.loyaltyStatus || null,
+            fare_class: result.fareClass || null,
+            eticket_number: result.eticketNumber || null,
+            is_refundable: result.isRefundable || false,
+          })
+          .eq("id", tripId);
+
+        if (updateError) throw new Error(updateError.message);
+      } else {
+        console.log("[AddFlight] Creating new trip...");
+        
+        // Insert new trip
+        const { data: tripData, error: tripError } = await supabase
+          .from("trips")
+          .insert({
+            user_id: session.user.id,
+            airline: airlineCode,
+            confirmation_code: formData.confirmationCode.toUpperCase(),
+            first_name: formData.firstName.toUpperCase() || null,
+            last_name: formData.lastName.toUpperCase(),
+            paid_total: parseFloat(formData.flightCost),
+            status: "active",
+            monitoring_enabled: true,
+            trip_type: result.tripType || null,
+            destination_iata: result.destination || null,
+            departure_date: result.departureDate || null,
+            ticket_expiration: result.ticketExpiration || null,
+            full_route: result.fullRoute || null,
+            total_duration_minutes: result.totalDuration ? parseInt(result.totalDuration) : null,
+            loyalty_status: result.loyaltyStatus || null,
+            fare_class: result.fareClass || null,
+            eticket_number: result.eticketNumber || null,
+            is_refundable: result.isRefundable || false,
+          })
+          .select()
+          .single();
+
+        if (tripError) throw new Error(tripError.message);
+        if (!tripData) throw new Error("Failed to create trip");
+        
+        tripId = tripData.id;
       }
 
-      // Step 4: Create segments if flight details were scraped
+      // Step 4: Create segments if flight details were scraped (only valid ones)
       if (result.flights && result.flights.length > 0) {
-        const segments = result.flights.map((flight: any) => ({
-          trip_id: tripData.id,
-          carrier: airlineCode,
-          flight_number: flight.flightNumber || "TBD",
-          depart_airport: flight.departureAirport || "TBD",
-          arrive_airport: flight.arrivalAirport || "TBD",
-          depart_datetime: flight.departureTime || new Date().toISOString(),
-          arrive_datetime: flight.arrivalTime || new Date().toISOString(),
-          aircraft: flight.aircraft || null,
-          depart_terminal: flight.departureTerminal || null,
-          depart_gate: flight.departureGate || null,
-          arrive_terminal: flight.arrivalTerminal || null,
-          arrive_gate: flight.arrivalGate || null,
-          status: flight.status || "Scheduled",
-          layover_duration_minutes: flight.layoverDuration ? parseInt(flight.layoverDuration) : null,
-          is_change_of_plane: flight.isChangeOfPlane || false,
-          segment_index: flight.segmentIndex,
-        }));
+        // Filter out junk segments - only keep those with valid flight numbers and airports
+        const validFlights = result.flights.filter(
+          (f: any) => f.flightNumber && 
+                     f.flightNumber !== "TBD" && 
+                     f.departureAirport && 
+                     f.arrivalAirport &&
+                     f.departureAirport.length === 3 &&
+                     f.arrivalAirport.length === 3
+        );
 
-        const { error: segmentsError } = await supabase
-          .from("segments")
-          .insert(segments);
+        console.log(`[AddFlight] Inserting ${validFlights.length} valid segments out of ${result.flights.length} total`);
 
-        if (segmentsError) {
-          console.error("Error creating segments:", segmentsError);
-          // Don't throw - trip was created successfully
+        if (validFlights.length > 0) {
+          const segments = validFlights.map((flight: any, index: number) => ({
+            trip_id: tripId,
+            carrier: airlineCode,
+            flight_number: flight.flightNumber,
+            depart_airport: flight.departureAirport,
+            arrive_airport: flight.arrivalAirport,
+            depart_datetime: flight.departureTime || new Date().toISOString(),
+            arrive_datetime: flight.arrivalTime || new Date().toISOString(),
+            aircraft: flight.aircraft || null,
+            depart_terminal: flight.departureTerminal || null,
+            depart_gate: flight.departureGate || null,
+            arrive_terminal: flight.arrivalTerminal || null,
+            arrive_gate: flight.arrivalGate || null,
+            status: flight.status || "Scheduled",
+            layover_duration_minutes: flight.layoverDuration ? parseInt(flight.layoverDuration) : null,
+            is_change_of_plane: flight.isChangeOfPlane || false,
+            segment_index: index,
+          }));
+
+          const { error: segmentsError } = await supabase
+            .from("segments")
+            .insert(segments);
+
+          if (segmentsError) {
+            console.error("Error creating segments:", segmentsError);
+            throw new Error(`Failed to create segments: ${segmentsError.message}`);
+          }
         }
       }
 
       // Step 5: Log audit
-      await logAudit("create", tripData.id);
+      await logAudit("create", tripId);
 
       // Success!
       toast({
