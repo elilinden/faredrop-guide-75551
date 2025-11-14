@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { TripCard } from "@/components/TripCard";
 import { DashboardInsights } from "@/components/DashboardInsights";
+import { AddFlightModal } from "@/components/AddFlightModal";
 import { Plane, Plus, Settings } from "lucide-react";
 import { type AirlineKey } from "@/lib/airlines";
 
@@ -12,90 +13,91 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
   const [segmentsMap, setSegmentsMap] = useState<Record<string, any[]>>({});
+  const [addFlightOpen, setAddFlightOpen] = useState(false);
   const [insights, setInsights] = useState({
     tripsAddedThisWeek: 0,
     activeMonitors: 0,
     potentialSavings: 0,
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate("/auth");
-        return;
-      }
+  const fetchData = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+      return;
+    }
 
-      // Fetch trips (excluding soft-deleted)
-      const { data: tripsData, error: tripsError } = await supabase
-        .from("trips")
-        .select("*")
-        .eq("user_id", session.user.id)
-        .is("deleted_at", null)
-        .order("created_at", { ascending: false });
+    // Fetch trips (excluding soft-deleted)
+    const { data: tripsData, error: tripsError } = await supabase
+      .from("trips")
+      .select("*")
+      .eq("user_id", session.user.id)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
 
-      if (tripsError) {
-        console.error("Error fetching trips:", tripsError);
-        setLoading(false);
-        return;
-      }
-
-      setTrips(tripsData || []);
-
-      // Fetch segments for all trips
-      if (tripsData && tripsData.length > 0) {
-        const tripIds = tripsData.map((t) => t.id);
-        const { data: segmentsData, error: segmentsError } = await supabase
-          .from("segments")
-          .select("*")
-          .in("trip_id", tripIds);
-
-        if (!segmentsError && segmentsData) {
-          const map: Record<string, any[]> = {};
-          segmentsData.forEach((seg) => {
-            if (!map[seg.trip_id]) map[seg.trip_id] = [];
-            map[seg.trip_id].push(seg);
-          });
-          setSegmentsMap(map);
-        }
-
-        // Fetch insights data
-        const oneWeekAgo = new Date();
-        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-        
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        // Trips added this week
-        const tripsAddedThisWeek = tripsData.filter(
-          t => new Date(t.created_at) >= oneWeekAgo
-        ).length;
-
-        // Active monitors
-        const activeMonitors = tripsData.filter(
-          t => t.monitoring_enabled !== false
-        ).length;
-
-        // Potential savings from price checks
-        const { data: priceChecks } = await supabase
-          .from("price_checks")
-          .select("diff_vs_paid")
-          .in("trip_id", tripIds)
-          .gte("created_at", thirtyDaysAgo.toISOString())
-          .gt("diff_vs_paid", 0);
-
-        const potentialSavings = priceChecks?.reduce((sum, check) => sum + (check.diff_vs_paid || 0), 0) || 0;
-
-        setInsights({
-          tripsAddedThisWeek,
-          activeMonitors,
-          potentialSavings,
-        });
-      }
-
+    if (tripsError) {
+      console.error("Error fetching trips:", tripsError);
       setLoading(false);
-    };
+      return;
+    }
 
+    setTrips(tripsData || []);
+
+    // Fetch segments for all trips
+    if (tripsData && tripsData.length > 0) {
+      const tripIds = tripsData.map((t) => t.id);
+      const { data: segmentsData, error: segmentsError } = await supabase
+        .from("segments")
+        .select("*")
+        .in("trip_id", tripIds);
+
+      if (!segmentsError && segmentsData) {
+        const map: Record<string, any[]> = {};
+        segmentsData.forEach((seg) => {
+          if (!map[seg.trip_id]) map[seg.trip_id] = [];
+          map[seg.trip_id].push(seg);
+        });
+        setSegmentsMap(map);
+      }
+
+      // Fetch insights data
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      // Trips added this week
+      const tripsAddedThisWeek = tripsData.filter(
+        t => new Date(t.created_at) >= oneWeekAgo
+      ).length;
+
+      // Active monitors
+      const activeMonitors = tripsData.filter(
+        t => t.monitoring_enabled !== false
+      ).length;
+
+      // Potential savings from price checks
+      const { data: priceChecks } = await supabase
+        .from("price_checks")
+        .select("diff_vs_paid")
+        .in("trip_id", tripIds)
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .gt("diff_vs_paid", 0);
+
+      const potentialSavings = priceChecks?.reduce((sum, check) => sum + (check.diff_vs_paid || 0), 0) || 0;
+
+      setInsights({
+        tripsAddedThisWeek,
+        activeMonitors,
+        potentialSavings,
+      });
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchData();
   }, [navigate]);
 
@@ -116,28 +118,25 @@ const Dashboard = () => {
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Link to="/settings">
-              <Button variant="outline" size="icon">
-                <Settings className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSignOut}>
+              Sign Out
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/settings">
+                <Settings className="mr-2 h-4 w-4" />
+                Settings
+              </Link>
+            </Button>
+            <Button onClick={() => setAddFlightOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add My Flight
+            </Button>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Your Trips</h1>
-          <Link to="/trips/new">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Trip
-            </Button>
-          </Link>
-        </div>
-
         {trips.length > 0 && (
           <DashboardInsights
             tripsAddedThisWeek={insights.tripsAddedThisWeek}
@@ -145,6 +144,16 @@ const Dashboard = () => {
             potentialSavings={insights.potentialSavings}
           />
         )}
+
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">My Flights</h2>
+          <Button variant="outline" asChild>
+            <Link to="/trip/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Manual Entry
+            </Link>
+          </Button>
+        </div>
 
         {trips.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
@@ -179,6 +188,12 @@ const Dashboard = () => {
           </div>
         )}
       </main>
+
+      <AddFlightModal 
+        open={addFlightOpen} 
+        onOpenChange={setAddFlightOpen}
+        onSuccess={fetchData}
+      />
     </div>
   );
 };
