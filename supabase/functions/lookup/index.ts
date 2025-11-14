@@ -302,14 +302,14 @@ Deno.serve(async (req) => {
       tripType: extractWithRegex(html, [/trip type[:\s]+(\w+)/i, /(\w+)\s+trip/i]) || "round-trip",
       destination: extractWithRegex(html, [/destination[:\s]+([A-Z]{3})/i, /to[:\s]+([A-Z]{3})/i]) || null,
       ticketExpiration: extractWithRegex(html, [/ticket expires?[:\s]+([\w\s,]+)/i, /expiration[:\s]+([\w\s,]+)/i]),
-      fullRoute: extractWithRegex(html, [/route[:\s]+([\w\s\u2192\u2013->]+)/i]),
+      fullRoute: extractWithRegex(html, [/route[:\s]+([\w\s\u2192\u2013\-\>]+)/i]),
       // IMPORTANT: return duration as *minutes* (string) so parseInt() in AddFlightModal is correct
       totalDuration: totalDurationMinutes !== null ? String(totalDurationMinutes) : null,
       passengerName: `${firstName || ""} ${lastName}`.trim(),
       loyaltyStatus: extractWithRegex(html, [/(?:skymiles|frequent flyer|loyalty)[:\s]+(\w+)/i, /(\w+)\s+member/i]),
       fareClass: extractWithRegex(html, [/(?:fare|cabin|class)[:\s]+(\w+)/i, /(economy|business|first|premium)/i]),
       eticketNumber: extractWithRegex(html, [/e-?ticket[:\s#]+([\d-]+)/i, /ticket (?:number|#)[:\s]+([\d-]+)/i]),
-      isRefundable: html.toLowerCase().includes("refundable") && !html.toLower().includes("non-refundable"),
+      isRefundable: html.toLowerCase().includes("refundable") && !html.toLowerCase().includes("non-refundable"),
     };
 
     // Extract flight segments
