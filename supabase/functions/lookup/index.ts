@@ -126,21 +126,35 @@ function parseFlightSegments(html: string, baseDate: Date | null): any[] {
   
   if (analyticsOriginMatch && analyticsDestMatch) {
     console.log(`[lookup] Found analytics data: ${analyticsOriginMatch[1]} → ${analyticsDestMatch[1]}`);
+    console.log("[lookup] Analytics origin valid?", isValidIATA(analyticsOriginMatch[1]), "dest valid?", isValidIATA(analyticsDestMatch[1]));
+    console.log("[lookup] analyticsDateMatch:", analyticsDateMatch?.[1] ?? null);
     
     // Try to find flight number from v91 or other variables
     const flightNumberMatch = html.match(/(?:DL|Delta)\s*(\d{3,4})/i);
     const flightNum = flightNumberMatch ? `DL${flightNumberMatch[1]}` : null;
+    console.log("[lookup] Candidate flight number from analytics:", flightNum);
+    if (!flightNum) {
+      console.log("[lookup] No flight number found near analytics data");
+    } else {
+      console.log("[lookup] Flight number valid?", isValidFlightNumber(flightNum));
+    }
     
     if (flightNum && isValidFlightNumber(flightNum)) {
       // Try to extract times from various patterns
       const timeMatches = [...html.matchAll(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))/gi)];
+      console.log("[lookup] Found", timeMatches.length, "time strings overall");
+      if (timeMatches.length > 0) {
+        console.log("[lookup] First times:", timeMatches.slice(0, 5).map(m => m[1]).join(", "));
+      }
       
       if (timeMatches.length >= 2) {
         const depTime = timeMatches[0][1];
         const arrTime = timeMatches[1][1];
+        console.log("[lookup] Using times dep:", depTime, "arr:", arrTime);
         
         const departDateTimeIso = baseDate && depTime ? combineDateAndTime(baseDate, depTime) : null;
         const arriveDateTimeIso = baseDate && arrTime ? combineDateAndTime(baseDate, arrTime) : null;
+        console.log("[lookup] Combined ISO times dep:", departDateTimeIso, "arr:", arriveDateTimeIso);
         
         segments.push({
           segmentIndex: 0,
@@ -178,6 +192,7 @@ function parseFlightSegments(html: string, baseDate: Date | null): any[] {
     const depAirport = match[2];
     const arrAirport = match[3];
     const depTime = match[4];
+    console.log(`[lookup] Block ${i} candidate`, { flightNum, depAirport, arrAirport, depTime, validDep: isValidIATA(depAirport), validArr: isValidIATA(arrAirport), validFlight: isValidFlightNumber(flightNum) });
     
     // Validate IATA codes
     if (!isValidIATA(depAirport) || !isValidIATA(arrAirport)) {
@@ -388,8 +403,11 @@ Deno.serve(async (req) => {
     // Look for any airport codes in the HTML
     const allIATACodes = [...html.matchAll(/\b([A-Z]{3})\b/g)];
     console.log(`[lookup] Found ${allIATACodes.length} three-letter codes in HTML`);
-    const uniqueCodes = [...new Set(allIATACodes.map(m => m[1]))].slice(0, 20);
-    console.log(`[lookup] Sample codes:`, uniqueCodes.join(", "));
+    const uniqueAll = [...new Set(allIATACodes.map(m => m[1]))];
+    const validIATA = uniqueAll.filter(c => isValidIATA(c));
+    console.log(`[lookup] Unique codes total: ${uniqueAll.length}, valid IATA: ${validIATA.length}`);
+    console.log(`[lookup] First 20 codes: ${uniqueAll.slice(0, 20).join(", ")}`);
+    console.log(`[lookup] First 20 VALID IATA: ${validIATA.slice(0, 20).join(", ")}`);
 
     // Extract a base date for segment datetimes
     const baseDate = extractBaseDate(html);
