@@ -37,6 +37,17 @@ import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
 import { logAudit } from "@/lib/audit";
 
+const formatDuration = (minutes?: number | null) => {
+  if (!minutes || minutes <= 0) return null;
+
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hours && mins) return `${hours}h ${mins}m`;
+  if (hours) return `${hours}h`;
+  return `${mins}m`;
+};
+
 const TripDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -148,10 +159,17 @@ const TripDetail = () => {
 
   if (!trip) return null;
 
-  const route =
-    segments.length > 0
+  const passengerName =
+    trip.passenger_name ||
+    trip.scraped_passenger_name ||
+    [trip.first_name, trip.last_name].filter(Boolean).join(" ") ||
+    null;
+
+  const displayRoute =
+    trip.full_route ||
+    (segments.length > 0
       ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
-      : "Route details";
+      : "Route details");
 
   const handleMonitoringToggle = async (enabled: boolean) => {
     try {
