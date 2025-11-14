@@ -185,7 +185,7 @@ const TripEdit = () => {
 
       let origin_iata = null;
       let destination_iata = null;
-      let departure_date = null;
+      let depart_date = null;
       let return_date = null;
       let flight_numbers: string[] = [];
 
@@ -197,7 +197,7 @@ const TripEdit = () => {
         destination_iata = lastSeg.arrive_airport || null;
         
         if (firstSeg.depart_datetime) {
-          departure_date = firstSeg.depart_datetime.split('T')[0];
+          depart_date = firstSeg.depart_datetime.split('T')[0];
         }
         
         if (segments.length > 1 && lastSeg.depart_datetime) {
@@ -223,11 +223,10 @@ const TripEdit = () => {
           notes: data.notes || null,
           origin_iata,
           destination_iata,
-          departure_date,
+          depart_date,
           return_date,
           flight_numbers,
           cabin: data.brand || 'ECONOMY',
-          depart_date: departure_date,
         })
         .eq("id", id)
         .eq("user_id", user.id);
