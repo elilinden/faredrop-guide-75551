@@ -1,11 +1,11 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.81.1';
-import { Resend } from 'https://esm.sh/resend@2.0.0';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
+import { Resend } from "https://esm.sh/resend@2.0.0";
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const resendApiKey = Deno.env.get('RESEND_API_KEY');
-const appBaseUrl = Deno.env.get('APP_BASE_URL') || 'https://faredrop.lovable.app';
-const webhookSecret = Deno.env.get('WEBHOOK_SECRET');
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const resendApiKey = Deno.env.get("RESEND_API_KEY");
+const appBaseUrl = Deno.env.get("APP_BASE_URL") || "https://faredrop.lovable.app";
+const webhookSecret = Deno.env.get("WEBHOOK_SECRET");
 
 const AMADEUS_ENV = (Deno.env.get("AMADEUS_ENV") || "test") === "production" ? "production" : "test";
 const AMADEUS_HOST = AMADEUS_ENV === "production" ? "https://api.amadeus.com" : "https://test.api.amadeus.com";
@@ -16,34 +16,30 @@ const resend = resendApiKey ? new Resend(resendApiKey) : null;
 // HMAC signature verification for webhook security
 async function verifyWebhookSignature(request: Request, body: string): Promise<boolean> {
   if (!webhookSecret) {
-    console.warn('WEBHOOK_SECRET not configured - skipping signature verification');
+    console.warn("WEBHOOK_SECRET not configured - skipping signature verification");
     return true; // Allow if secret not configured (for backwards compatibility)
   }
 
-  const signature = request.headers.get('X-Webhook-Signature');
+  const signature = request.headers.get("X-Webhook-Signature");
   if (!signature) {
-    console.error('Missing X-Webhook-Signature header');
+    console.error("Missing X-Webhook-Signature header");
     return false;
   }
 
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     encoder.encode(webhookSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign']
+    ["sign"],
   );
 
-  const expectedSignature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    encoder.encode(body)
-  );
+  const expectedSignature = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
 
   const expectedHex = Array.from(new Uint8Array(expectedSignature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
   // Timing-safe comparison
   return signature === expectedHex;
@@ -53,43 +49,43 @@ function missingForPricing(trip: any) {
   const miss: string[] = [];
   if (!trip.origin_iata || !/^[A-Z]{3}$/.test(trip.origin_iata)) miss.push("origin_iata");
   if (!trip.destination_iata || !/^[A-Z]{3}$/.test(trip.destination_iata)) miss.push("destination_iata");
-  if (!trip.departure_date || !/^\d{4}-\d{2}-\d{2}$/.test(trip.departure_date)) miss.push("departure_date");
+  if (!trip.depart_date || !/^\d{4}-\d{2}-\d{2}$/.test(trip.departure_date)) miss.push("departure_date");
   return miss;
 }
 
 const manageTripLinks: Record<string, string> = {
-  AA: 'https://www.aa.com/reservation/view/find-your-reservation',
-  DL: 'https://www.delta.com/my-trips/trip-details',
-  UA: 'https://www.united.com/en/us/manageres/mytrips',
-  AS: 'https://www.alaskaair.com/booking/reservation-lookup',
+  AA: "https://www.aa.com/reservation/view/find-your-reservation",
+  DL: "https://www.delta.com/my-trips/trip-details",
+  UA: "https://www.united.com/en/us/manageres/mytrips",
+  AS: "https://www.alaskaair.com/booking/reservation-lookup",
 };
 
 const airlineNames: Record<string, string> = {
-  AA: 'American Airlines',
-  DL: 'Delta Air Lines',
-  UA: 'United Airlines',
-  AS: 'Alaska Airlines',
+  AA: "American Airlines",
+  DL: "Delta Air Lines",
+  UA: "United Airlines",
+  AS: "Alaska Airlines",
 };
 
 function computeCheckFrequency(departDate: string | null, userPrefs: any, tripOverride: number | null): number {
   // Use trip override if set
   if (tripOverride) return tripOverride;
-  
+
   // Use fixed mode if user prefers
-  if (userPrefs?.monitor_mode === 'fixed') {
+  if (userPrefs?.monitor_mode === "fixed") {
     return userPrefs.monitor_frequency_minutes || 180;
   }
-  
+
   // Auto mode: compute based on days to departure
   if (!departDate) return 180; // Default 3h if no date
-  
+
   const now = new Date();
   const depart = new Date(departDate);
   const daysUntil = Math.floor((depart.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  
+
   if (daysUntil > 90) return 1440; // 24h
-  if (daysUntil > 30) return 360;  // 6h
-  if (daysUntil > 7) return 180;   // 3h
+  if (daysUntil > 30) return 360; // 6h
+  if (daysUntil > 7) return 180; // 3h
   return 60; // 1h
 }
 
@@ -139,12 +135,12 @@ function mapTripToSearchParams(trip: any) {
   if ((!origin || !destination || !departureDate) && trip.segments?.length > 0) {
     const firstSeg = trip.segments[0];
     const lastSeg = trip.segments[trip.segments.length - 1];
-    
+
     origin = origin || firstSeg.depart_airport;
     destination = destination || lastSeg.arrive_airport;
-    
+
     if (!departureDate && firstSeg.depart_datetime) {
-      departureDate = firstSeg.depart_datetime.split('T')[0];
+      departureDate = firstSeg.depart_datetime.split("T")[0];
     }
   }
 
@@ -199,10 +195,13 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; currency: st
     }
 
     // Determine confidence based on exact flight info
-    const hasExactFlightInfo = trip.segments?.length > 0 &&
+    const hasExactFlightInfo =
+      trip.segments?.length > 0 &&
       trip.segments.every((s: any) => s.carrier && s.flight_number && s.depart_airport && s.arrive_airport);
 
-    console.log(`[fetchPublicFare] Found price $${total} for trip ${trip.id} (confidence: ${hasExactFlightInfo ? 'exact-flight' : 'route-estimate'})`);
+    console.log(
+      `[fetchPublicFare] Found price $${total} for trip ${trip.id} (confidence: ${hasExactFlightInfo ? "exact-flight" : "route-estimate"})`,
+    );
 
     return {
       price: Number(total),
@@ -222,18 +221,14 @@ async function fetchPublicFare(trip: any): Promise<{ price: number; currency: st
 
 async function sendPriceAlert(trip: any, diff: number, publicPrice: number) {
   if (!resend) {
-    console.log('[sendPriceAlert] Resend not configured, skipping email');
+    console.log("[sendPriceAlert] Resend not configured, skipping email");
     return;
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('email, full_name')
-    .eq('id', trip.user_id)
-    .single();
+  const { data: profile } = await supabase.from("profiles").select("email, full_name").eq("id", trip.user_id).single();
 
   if (!profile?.email) {
-    console.log('[sendPriceAlert] No email found for user');
+    console.log("[sendPriceAlert] No email found for user");
     return;
   }
 
@@ -241,9 +236,9 @@ async function sendPriceAlert(trip: any, diff: number, publicPrice: number) {
   const manageTripUrl = manageTripLinks[trip.airline];
   const tripUrl = `${appBaseUrl}/trips/${trip.id}`;
 
-  const requiresFirstName = ['AA', 'DL'].includes(trip.airline);
+  const requiresFirstName = ["AA", "DL"].includes(trip.airline);
   const nameFields = requiresFirstName
-    ? `PNR: ${trip.confirmation_code} | First name: ${trip.first_name || 'N/A'} | Last name: ${trip.last_name}`
+    ? `PNR: ${trip.confirmation_code} | First name: ${trip.first_name || "N/A"} | Last name: ${trip.last_name}`
     : `PNR: ${trip.confirmation_code} | Last name: ${trip.last_name}`;
 
   const html = `
@@ -285,21 +280,21 @@ async function sendPriceAlert(trip: any, diff: number, publicPrice: number) {
 
       <p style="color: #6b7280; font-size: 12px; line-height: 1.5; border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 24px;">
         <strong>Important:</strong> We never log in or change your booking. Alerts are based on public prices; 
-        the airline's Change preview is the source of truth. This is a ${trip.last_confidence || 'route-estimate'} signal.
+        the airline's Change preview is the source of truth. This is a ${trip.last_confidence || "route-estimate"} signal.
       </p>
     </div>
   `;
 
   try {
     await resend.emails.send({
-      from: 'FareDrop Guide <alerts@updates.lovable.app>',
+      from: "FareDrop Guide <alerts@updates.lovable.app>",
       to: [profile.email],
       subject: `Price drop found on your ${airlineName} trip: ~$${diff.toFixed(2)} cheaper`,
       html,
     });
     console.log(`[sendPriceAlert] Email sent to ${profile.email}`);
   } catch (error) {
-    console.error('[sendPriceAlert] Error sending email:', error);
+    console.error("[sendPriceAlert] Error sending email:", error);
   }
 }
 
@@ -311,21 +306,24 @@ async function checkTrip(trip: any, userPrefs: any) {
   if (miss.length) {
     // If missing required fields but has segments, try to derive from segments
     if (!trip.segments || trip.segments.length === 0) {
-      console.warn(`[checkTrip] Trip ${trip.id} missing required fields and has no segments: ${miss.join(', ')}`);
+      console.warn(`[checkTrip] Trip ${trip.id} missing required fields and has no segments: ${miss.join(", ")}`);
       // Schedule next check anyway to avoid breaking the queue
       const now = new Date();
       const freqMinutes = computeCheckFrequency(trip.depart_date, userPrefs, trip.monitor_frequency_minutes);
       const nextCheckAt = new Date(now.getTime() + freqMinutes * 60 * 1000);
-      await supabase.from('trips').update({ 
-        last_checked_at: now.toISOString(),
-        next_check_at: nextCheckAt.toISOString() 
-      }).eq('id', trip.id);
+      await supabase
+        .from("trips")
+        .update({
+          last_checked_at: now.toISOString(),
+          next_check_at: nextCheckAt.toISOString(),
+        })
+        .eq("id", trip.id);
       return;
     }
   }
 
   // Add jitter to avoid bursts
-  await new Promise(resolve => setTimeout(resolve, Math.random() * 500));
+  await new Promise((resolve) => setTimeout(resolve, Math.random() * 500));
 
   let publicFare = null;
   let retries = 0;
@@ -340,7 +338,7 @@ async function checkTrip(trip: any, userPrefs: any) {
       if (retries <= maxRetries) {
         const delay = Math.pow(4, retries) * 250; // 250ms, 1s, 4s
         console.log(`[checkTrip] Retry ${retries} after ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       } else {
         console.error(`[checkTrip] Failed after ${maxRetries} retries:`, error);
       }
@@ -348,13 +346,9 @@ async function checkTrip(trip: any, userPrefs: any) {
   }
 
   const now = new Date();
-  
+
   // Compute next check time
-  const freqMinutes = computeCheckFrequency(
-    trip.depart_date,
-    userPrefs,
-    trip.monitor_frequency_minutes
-  );
+  const freqMinutes = computeCheckFrequency(trip.depart_date, userPrefs, trip.monitor_frequency_minutes);
   const nextCheckAt = new Date(now.getTime() + freqMinutes * 60 * 1000);
 
   // Update last_checked_at and next_check_at regardless of result
@@ -365,14 +359,14 @@ async function checkTrip(trip: any, userPrefs: any) {
 
   if (publicFare) {
     const diff = trip.paid_total - publicFare.price;
-    
+
     updateData.last_public_price = publicFare.price;
     updateData.last_public_currency = publicFare.currency;
     updateData.last_public_provider = "amadeus";
     updateData.last_confidence = publicFare.confidence;
 
     // Insert into price_checks history
-    await supabase.from('price_checks').insert({
+    await supabase.from("price_checks").insert({
       trip_id: trip.id,
       observed_price: publicFare.price,
       diff_vs_paid: diff,
@@ -383,11 +377,9 @@ async function checkTrip(trip: any, userPrefs: any) {
     const userThreshold = userPrefs?.min_drop_threshold || 10;
     const tripThreshold = trip.monitor_threshold || 1.0;
     const threshold = Math.max(userThreshold, tripThreshold);
-    
+
     const lastSignalAt = trip.last_signal_at ? new Date(trip.last_signal_at) : null;
-    const hoursSinceLastSignal = lastSignalAt 
-      ? (now.getTime() - lastSignalAt.getTime()) / (1000 * 60 * 60)
-      : 999;
+    const hoursSinceLastSignal = lastSignalAt ? (now.getTime() - lastSignalAt.getTime()) / (1000 * 60 * 60) : 999;
 
     const emailEnabled = userPrefs?.email_alerts_enabled !== false;
 
@@ -397,30 +389,31 @@ async function checkTrip(trip: any, userPrefs: any) {
     }
   }
 
-  await supabase.from('trips').update(updateData).eq('id', trip.id);
+  await supabase.from("trips").update(updateData).eq("id", trip.id);
   console.log(`[checkTrip] Updated trip ${trip.id}`);
 }
 
 Deno.serve(async (req) => {
-  console.log('[price-watch] Starting scheduled check');
+  console.log("[price-watch] Starting scheduled check");
 
   // Verify webhook signature
   const requestBody = await req.text();
   const isValid = await verifyWebhookSignature(req, requestBody);
-  
+
   if (!isValid) {
-    console.error('Invalid webhook signature');
-    return new Response(
-      JSON.stringify({ error: 'Invalid signature' }),
-      { status: 401, headers: { 'Content-Type': 'application/json' } }
-    );
+    console.error("Invalid webhook signature");
+    return new Response(JSON.stringify({ error: "Invalid signature" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   try {
     // Fetch active trips with monitoring enabled, including segments
     const { data: trips, error } = await supabase
-      .from('trips')
-      .select(`
+      .from("trips")
+      .select(
+        `
         *,
         segments (
           carrier,
@@ -429,10 +422,11 @@ Deno.serve(async (req) => {
           arrive_airport,
           depart_datetime
         )
-      `)
-      .eq('monitoring_enabled', true)
-      .eq('status', 'active')
-      .is('deleted_at', null);
+      `,
+      )
+      .eq("monitoring_enabled", true)
+      .eq("status", "active")
+      .is("deleted_at", null);
 
     if (error) throw error;
 
@@ -440,32 +434,29 @@ Deno.serve(async (req) => {
 
     if (!trips || trips.length === 0) {
       return new Response(JSON.stringify({ checked: 0 }), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     }
 
     // Get unique user IDs and fetch their preferences
-    const userIds = [...new Set(trips.map(t => t.user_id))];
-    const { data: prefsData } = await supabase
-      .from('user_preferences')
-      .select('*')
-      .in('user_id', userIds);
-    
-    const prefsMap = new Map(prefsData?.map(p => [p.user_id, p]) || []);
+    const userIds = [...new Set(trips.map((t) => t.user_id))];
+    const { data: prefsData } = await supabase.from("user_preferences").select("*").in("user_id", userIds);
+
+    const prefsMap = new Map(prefsData?.map((p) => [p.user_id, p]) || []);
 
     // Filter trips that need checking (skip if checked recently)
     const now = new Date();
-    const tripsToCheck = trips.filter(trip => {
+    const tripsToCheck = trips.filter((trip) => {
       if (!trip.last_checked_at) return true;
-      
+
       const lastChecked = new Date(trip.last_checked_at);
       const minutesSinceCheck = (now.getTime() - lastChecked.getTime()) / (1000 * 60);
-      
+
       const userPrefs = prefsMap.get(trip.user_id);
       const frequency = computeCheckFrequency(trip.depart_date, userPrefs, trip.monitor_frequency_minutes);
-      
+
       // Grace period of 5 minutes to prevent overlap
-      return minutesSinceCheck >= (frequency - 5);
+      return minutesSinceCheck >= frequency - 5;
     });
 
     console.log(`[price-watch] ${tripsToCheck.length} trips need checking`);
@@ -474,22 +465,24 @@ Deno.serve(async (req) => {
     const batchSize = 5;
     for (let i = 0; i < tripsToCheck.length; i += batchSize) {
       const batch = tripsToCheck.slice(i, i + batchSize);
-      await Promise.all(batch.map(trip => {
-        const userPrefs = prefsMap.get(trip.user_id);
-        return checkTrip(trip, userPrefs).catch(err => {
-          console.error(`[price-watch] Error checking trip ${trip.id}:`, err);
-        });
-      }));
+      await Promise.all(
+        batch.map((trip) => {
+          const userPrefs = prefsMap.get(trip.user_id);
+          return checkTrip(trip, userPrefs).catch((err) => {
+            console.error(`[price-watch] Error checking trip ${trip.id}:`, err);
+          });
+        }),
+      );
     }
 
     return new Response(JSON.stringify({ checked: tripsToCheck.length }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error('[price-watch] Error:', error);
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
+    console.error("[price-watch] Error:", error);
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 });
