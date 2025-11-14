@@ -70,62 +70,6 @@ function combineDateAndTime(baseDate: Date, timeStr: string): string | null {
   return null;
 }
 
-// Try to extract a "base" trip date like "Tue, Mar 31, 2026"
-function extractBaseDate(html: string): Date | null {
-  const datePattern = /([A-Z][a-z]{2}),?\s+([A-Z][a-z]{2})\s+(\d{1,2})(?:,\s*(\d{4}))?/;
-  const match = html.match(datePattern);
-  if (!match) return null;
-
-  const [, , monthStr, dayStr, yearStr] = match;
-  const year = yearStr || String(new Date().getFullYear());
-  const date = new Date(`${monthStr} ${dayStr}, ${year}`);
-  if (isNaN(date.getTime())) return null;
-  return date;
-}
-
-// Combine a base date + a time string like "7:00 AM" into an ISO datetime
-function combineDateAndTime(baseDate: Date, timeStr: string): string | null {
-  const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/);
-  if (!timeMatch) return null;
-
-  let [, hourStr, minuteStr, ampm] = timeMatch;
-  let hour = parseInt(hourStr, 10);
-  const minute = parseInt(minuteStr, 10);
-
-  if (!isNaN(hour) && !isNaN(minute)) {
-    if (ampm) {
-      ampm = ampm.toUpperCase();
-      if (ampm === "PM" && hour < 12) hour += 12;
-      if (ampm === "AM" && hour === 12) hour = 0;
-    }
-    const dt = new Date(baseDate);
-    dt.setHours(hour, minute, 0, 0);
-    return dt.toISOString();
-  }
-
-  return null;
-}
-
-// Parse a duration string like "7h 0m" into minutes
-function parseDurationToMinutes(str: string | null): number | null {
-  if (!str) return null;
-  const hoursMatch = str.match(/(\d+)\s*h/i);
-  const minsMatch = str.match(/(\d+)\s*m/i);
-  const h = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
-  const m = minsMatch ? parseInt(minsMatch[1], 10) : 0;
-  if (isNaN(h) && isNaN(m)) return null;
-  return h * 60 + m;
-}
-
-// Helper to validate if a string is a valid 3-letter IATA code
-function isValidIATA(code: string | null): boolean {
-  return !!code && /^[A-Z]{3}$/.test(code);
-}
-
-// Helper to validate if a string is a valid flight number
-function isValidFlightNumber(num: string | null): boolean {
-  return !!num && /^[A-Z]{2}\d+$/.test(num);
-}
 
 // Parse a duration string like "7h 0m" into minutes
 function parseDurationToMinutes(str: string | null): number | null {
