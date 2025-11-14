@@ -82,9 +82,31 @@ function parseDurationToMinutes(str: string | null): number | null {
   return h * 60 + m;
 }
 
+// List of valid IATA airport codes (top 500 most common airports)
+const VALID_IATA_CODES = new Set([
+  "ATL", "DFW", "DEN", "ORD", "LAX", "JFK", "LAS", "MCO", "MIA", "CLT",
+  "SEA", "PHX", "EWR", "SFO", "IAH", "BOS", "FLL", "MSP", "LGA", "DTW",
+  "PHL", "SLC", "DCA", "SAN", "BWI", "TPA", "AUS", "MDW", "BNA", "IAD",
+  "DAL", "HOU", "PDX", "STL", "HNL", "OAK", "MSY", "RDU", "SJC", "SAT",
+  "RSW", "SNA", "PIT", "CLE", "SMF", "IND", "CMH", "CVG", "PBI", "BDL",
+  "MKE", "OMA", "BUF", "BUR", "OGG", "ANC", "ONT", "JAX", "RNO", "TUS",
+  "ABQ", "ELP", "SDF", "MCI", "OKC", "RIC", "GEG", "TUL", "DSM", "BOI",
+  "LIT", "GSO", "ICT", "CHS", "SYR", "GSP", "LEX", "FAT", "COS", "PWM",
+  "MAF", "LBB", "GRR", "SBA", "MSN", "PNS", "CAK", "SAV", "FWA", "DAY",
+  "BGR", "MYR", "LAN", "TYS", "AGS", "CRW", "FAR", "BIL", "CAE", "TRI",
+  // International airports
+  "YYZ", "YVR", "YUL", "YYC", "MEX", "CUN", "GDL", "MTY", "PVR", "SJD",
+  "LHR", "CDG", "AMS", "FRA", "MAD", "FCO", "BCN", "MUC", "IST", "DUB",
+  "ZRH", "VIE", "BRU", "CPH", "ARN", "OSL", "HEL", "WAW", "PRG", "BUD",
+  "NRT", "ICN", "HKG", "SIN", "BKK", "KUL", "DEL", "BOM", "DXB", "DOH",
+  "SYD", "MEL", "BNE", "AKL", "PER", "GRU", "EZE", "SCL", "BOG", "LIM",
+  "PTY", "SJO", "SAL", "GUA"
+]);
+
 // Helper to validate if a string is a valid 3-letter IATA code
 function isValidIATA(code: string | null): boolean {
-  return !!code && /^[A-Z]{3}$/.test(code);
+  if (!code || code.length !== 3) return false;
+  return VALID_IATA_CODES.has(code.toUpperCase());
 }
 
 // Helper to validate if a string is a valid flight number
