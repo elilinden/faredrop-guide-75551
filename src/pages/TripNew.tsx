@@ -221,7 +221,7 @@ const TripNew = () => {
       // Extract flight details from segments for Amadeus pricing
       let origin_iata = null;
       let destination_iata = null;
-      let departure_date = null;
+      let depart_date = null;
       let return_date = null;
       let flight_numbers: string[] = [];
       if (segments.length > 0) {
@@ -230,7 +230,7 @@ const TripNew = () => {
         origin_iata = firstSeg.depart_airport || null;
         destination_iata = lastSeg.arrive_airport || null;
         if (firstSeg.depart_datetime) {
-          departure_date = firstSeg.depart_datetime.split('T')[0];
+          depart_date = firstSeg.depart_datetime.split('T')[0];
         }
         if (segments.length > 1 && lastSeg.depart_datetime) {
           return_date = lastSeg.depart_datetime.split('T')[0];
@@ -255,12 +255,11 @@ const TripNew = () => {
         notes: data.notes || null,
         origin_iata,
         destination_iata,
-        departure_date,
+        depart_date,
         return_date,
         flight_numbers,
         adults: 1,
         cabin: data.brand || 'ECONOMY',
-        depart_date: departure_date,
         currency: "USD",
         status: "active"
       }).select().single();
