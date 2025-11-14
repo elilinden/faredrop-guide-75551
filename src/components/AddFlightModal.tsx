@@ -23,6 +23,13 @@ interface FlightSegment {
   arrivalTime: string;
   status: string;
   aircraft?: string;
+  departureTerminal?: string;
+  departureGate?: string;
+  arrivalTerminal?: string;
+  arrivalGate?: string;
+  layoverDuration?: string;
+  isChangeOfPlane?: boolean;
+  segmentIndex?: number;
 }
 
 interface LookupResult {
@@ -31,6 +38,16 @@ interface LookupResult {
   scraped: boolean;
   message?: string;
   flights: FlightSegment[];
+  tripType?: string;
+  destination?: string;
+  ticketExpiration?: string;
+  fullRoute?: string;
+  totalDuration?: string;
+  loyaltyStatus?: string;
+  fareClass?: string;
+  eticketNumber?: string;
+  isRefundable?: boolean;
+  segmentCount?: number;
 }
 
 const airlines = [
@@ -135,6 +152,15 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
           paid_total: parseFloat(formData.flightCost),
           status: "active",
           monitoring_enabled: true,
+          trip_type: result.tripType || null,
+          ticket_expiration: result.ticketExpiration || null,
+          full_route: result.fullRoute || null,
+          total_duration_minutes: result.totalDuration ? parseInt(result.totalDuration) : null,
+          loyalty_status: result.loyaltyStatus || null,
+          fare_class: result.fareClass || null,
+          eticket_number: result.eticketNumber || null,
+          is_refundable: result.isRefundable || false,
+          destination_iata: result.destination || null,
         })
         .select()
         .single();
@@ -145,7 +171,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
 
       // Step 4: Create segments if flight details were scraped
       if (result.flights && result.flights.length > 0) {
-        const segments = result.flights.map((flight) => ({
+        const segments = result.flights.map((flight: any) => ({
           trip_id: tripData.id,
           carrier: airlineCode,
           flight_number: flight.flightNumber || "TBD",
@@ -153,6 +179,15 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
           arrive_airport: flight.arrivalAirport || "TBD",
           depart_datetime: flight.departureTime || new Date().toISOString(),
           arrive_datetime: flight.arrivalTime || new Date().toISOString(),
+          aircraft: flight.aircraft || null,
+          depart_terminal: flight.departureTerminal || null,
+          depart_gate: flight.departureGate || null,
+          arrive_terminal: flight.arrivalTerminal || null,
+          arrive_gate: flight.arrivalGate || null,
+          status: flight.status || "Scheduled",
+          layover_duration_minutes: flight.layoverDuration ? parseInt(flight.layoverDuration) : null,
+          is_change_of_plane: flight.isChangeOfPlane || false,
+          segment_index: flight.segmentIndex,
         }));
 
         const { error: segmentsError } = await supabase
