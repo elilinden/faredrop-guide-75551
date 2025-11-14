@@ -23,6 +23,39 @@ interface AirlineConfig {
   };
 }
 
+interface ParsedFlightSegment {
+  segmentIndex: number;
+  flightNumber: string;
+  aircraft: string | null;
+  departureAirport: string;
+  departureTime: string | null;
+  departureTerminal: string | null;
+  departureGate: string | null;
+  arrivalAirport: string;
+  arrivalTime: string | null;
+  arrivalTerminal: string | null;
+  arrivalGate: string | null;
+  status: string;
+  layoverDuration: string | null;
+  isChangeOfPlane: boolean;
+}
+
+interface TripData {
+  airline: string;
+  confirmation: string;
+  tripType: string | null;
+  destination: string | null;
+  ticketExpiration: string | null;
+  fullRoute: string | null;
+  totalDuration: string | null;
+  passengerName: string;
+  loyaltyStatus: string | null;
+  fareClass: string | null;
+  eticketNumber: string | null;
+  isRefundable: boolean;
+  departureDate: string | null;
+}
+
 // Helper function to extract data using regex patterns
 function extractWithRegex(html: string, patterns: RegExp[]): string | null {
   for (const pattern of patterns) {
@@ -52,13 +85,13 @@ function combineDateAndTime(baseDate: Date, timeStr: string): string | null {
   const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)?/);
   if (!timeMatch) return null;
 
-  let [, hourStr, minuteStr, ampm] = timeMatch;
+  const [, hourStr, minuteStr, ampmRaw] = timeMatch;
   let hour = parseInt(hourStr, 10);
   const minute = parseInt(minuteStr, 10);
 
   if (!isNaN(hour) && !isNaN(minute)) {
+    const ampm = ampmRaw ? ampmRaw.toUpperCase() : null;
     if (ampm) {
-      ampm = ampm.toUpperCase();
       if (ampm === "PM" && hour < 12) hour += 12;
       if (ampm === "AM" && hour === 12) hour = 0;
     }
@@ -68,6 +101,31 @@ function combineDateAndTime(baseDate: Date, timeStr: string): string | null {
   }
 
   return null;
+}
+
+function parseAnalyticsDate(encoded: string | null | undefined): Date | null {
+  if (!encoded) return null;
+
+  try {
+    const decoded = decodeURIComponent(encoded);
+    const parts = decoded.split("/");
+    if (parts.length !== 3) return null;
+
+    const [monthStr, dayStr, yearStr] = parts;
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+    const year = parseInt(yearStr, 10);
+
+    if (Number.isNaN(month) || Number.isNaN(day) || Number.isNaN(year)) {
+      return null;
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return Number.isNaN(date.getTime()) ? null : date;
+  } catch (error) {
+    console.log("[lookup] Failed to decode analytics date", error);
+    return null;
+  }
 }
 
 
@@ -115,128 +173,186 @@ function isValidFlightNumber(num: string | null): boolean {
 }
 
 // Helper to parse flight segments from HTML with strict validation
-function parseFlightSegments(html: string, baseDate: Date | null): any[] {
-  const segments: any[] = [];
+function extractTime(html: string, keyword: "Depart" | "Arrive"): string | null {
+  const regex = new RegExp(`${keyword}[\\s\\S]{0,400}?td-flight-point-time[^>]*>\\s*([0-9]{1,2}:[0-9]{2}\\s*(?:AM|PM))`, "i");
+  const match = html.match(regex);
+  return match ? match[1].trim() : null;
+}
 
-  // First, try to extract from Delta's analytics tracking variables (most reliable)
-  // Pattern: v4=ORIGIN&v5=DESTINATION&v10=DATE&v91=CONFIRMATION
-  const analyticsOriginMatch = html.match(/[&?]v4=([A-Z]{3})/);
-  const analyticsDestMatch = html.match(/[&?]v5=([A-Z]{3})/);
-  const analyticsDateMatch = html.match(/[&?]v10=(\d{2}%2F\d{2}%2F\d{4})/);
-  
-  if (analyticsOriginMatch && analyticsDestMatch) {
-    console.log(`[lookup] Found analytics data: ${analyticsOriginMatch[1]} → ${analyticsDestMatch[1]}`);
-    console.log("[lookup] Analytics origin valid?", isValidIATA(analyticsOriginMatch[1]), "dest valid?", isValidIATA(analyticsDestMatch[1]));
-    console.log("[lookup] analyticsDateMatch:", analyticsDateMatch?.[1] ?? null);
-    
-    // Try to find flight number from v91 or other variables
-    const flightNumberMatch = html.match(/(?:DL|Delta)\s*(\d{3,4})/i);
-    const flightNum = flightNumberMatch ? `DL${flightNumberMatch[1]}` : null;
-    console.log("[lookup] Candidate flight number from analytics:", flightNum);
-    if (!flightNum) {
-      console.log("[lookup] No flight number found near analytics data");
-    } else {
-      console.log("[lookup] Flight number valid?", isValidFlightNumber(flightNum));
-    }
-    
-    if (flightNum && isValidFlightNumber(flightNum)) {
-      // Try to extract times from various patterns
-      const timeMatches = [...html.matchAll(/\b(\d{1,2}:\d{2}\s*(?:AM|PM))/gi)];
-      console.log("[lookup] Found", timeMatches.length, "time strings overall");
-      if (timeMatches.length > 0) {
-        console.log("[lookup] First times:", timeMatches.slice(0, 5).map(m => m[1]).join(", "));
+function extractAirport(html: string, keyword: "Depart" | "Arrive"): string | null {
+  const regex = new RegExp(`${keyword}[\\s\\S]{0,600}?td-train-point-city[^>]*>\\s*[^<]*\\(([A-Z]{3})\\)`, "i");
+  const match = html.match(regex);
+  return match ? match[1].trim().toUpperCase() : null;
+}
+
+function extractSegmentDate(html: string, keyword: "Depart" | "Arrive"): Date | null {
+  const regex = new RegExp(`${keyword}[\\s\\S]{0,400}?td-flight-point-date[^>]*>\\s*([^<]+)`, "i");
+  const match = html.match(regex);
+  if (!match) return null;
+  const cleaned = match[1].replace(/\s+/g, " ").trim();
+  return extractBaseDate(cleaned);
+}
+
+function extractFlightNumber(segmentHtml: string): string | null {
+  const patterns = [
+    /class="[^"]*flight-number[^"]*">\s*([A-Z]{2})\s*(\d{2,4})/i,
+    /data-flight-number="([A-Z]{2}\d{2,4})"/i,
+    /\b([A-Z]{2})\s*(\d{3,4})\b/,
+  ];
+
+  for (const pattern of patterns) {
+    const match = segmentHtml.match(pattern);
+    if (match) {
+      const letters = (match[1] ?? "").toUpperCase();
+      const digitsRaw = match.length > 2 ? match[2] : "";
+      const digits = typeof digitsRaw === "string" ? digitsRaw.trim() : "";
+      const candidate = `${letters}${digits}`.toUpperCase();
+      if (isValidFlightNumber(candidate)) {
+        return candidate;
       }
-      
-      if (timeMatches.length >= 2) {
-        const depTime = timeMatches[0][1];
-        const arrTime = timeMatches[1][1];
-        console.log("[lookup] Using times dep:", depTime, "arr:", arrTime);
-        
-        const departDateTimeIso = baseDate && depTime ? combineDateAndTime(baseDate, depTime) : null;
-        const arriveDateTimeIso = baseDate && arrTime ? combineDateAndTime(baseDate, arrTime) : null;
-        console.log("[lookup] Combined ISO times dep:", departDateTimeIso, "arr:", arriveDateTimeIso);
-        
-        segments.push({
-          segmentIndex: 0,
-          flightNumber: flightNum,
-          aircraft: null,
-          departureAirport: analyticsOriginMatch[1],
-          departureTime: departDateTimeIso || depTime,
-          departureTerminal: null,
-          departureGate: null,
-          arrivalAirport: analyticsDestMatch[1],
-          arrivalTime: arriveDateTimeIso || arrTime,
-          arrivalTerminal: null,
-          arrivalGate: null,
-          status: "Scheduled",
-          layoverDuration: null,
-          isChangeOfPlane: false,
-        });
-        
-        console.log(`[lookup] Parsed segment from analytics: ${flightNum} ${analyticsOriginMatch[1]} → ${analyticsDestMatch[1]}`);
-        return segments;
+      if (isValidFlightNumber(letters)) {
+        return letters;
       }
     }
   }
 
-  // Fallback: Look for flight segment blocks with strict pattern matching
-  // Only match if we have clear flight number + VALID airport codes + times
-  const segmentBlockPattern = /\b(DL\s*\d{3,4})\b[\s\S]{0,300}?\b([A-Z]{3})\b[\s\S]{0,100}?\b([A-Z]{3})\b[\s\S]{0,300}?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi;
-  
-  const blockMatches = [...html.matchAll(segmentBlockPattern)];
-  console.log(`[lookup] Found ${blockMatches.length} potential flight blocks`);
-  
-  for (let i = 0; i < blockMatches.length; i++) {
-    const match = blockMatches[i];
-    const flightNum = match[1].replace(/\s+/g, '');
-    const depAirport = match[2];
-    const arrAirport = match[3];
-    const depTime = match[4];
-    console.log(`[lookup] Block ${i} candidate`, { flightNum, depAirport, arrAirport, depTime, validDep: isValidIATA(depAirport), validArr: isValidIATA(arrAirport), validFlight: isValidFlightNumber(flightNum) });
-    
-    // Validate IATA codes
-    if (!isValidIATA(depAirport) || !isValidIATA(arrAirport)) {
-      console.log(`[lookup] Skipping invalid segment: ${depAirport} → ${arrAirport}`);
-      continue;
-    }
-    
-    if (!isValidFlightNumber(flightNum)) {
-      console.log(`[lookup] Skipping invalid flight number: ${flightNum}`);
-      continue;
+  return null;
+}
+
+function adjustArrivalIfNextDay(departIso: string | null, arriveIso: string | null): string | null {
+  if (!departIso || !arriveIso) return arriveIso;
+  const departDate = new Date(departIso);
+  const arriveDate = new Date(arriveIso);
+  if (Number.isNaN(departDate.getTime()) || Number.isNaN(arriveDate.getTime())) {
+    return arriveIso;
+  }
+
+  if (arriveDate <= departDate) {
+    arriveDate.setDate(arriveDate.getDate() + 1);
+    return arriveDate.toISOString();
+  }
+
+  return arriveIso;
+}
+
+function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightSegment[] {
+  const segments: ParsedFlightSegment[] = [];
+  const structuredMatches = [...html.matchAll(/<idp-flight-segment-info[^>]*>([\s\S]*?)<\/idp-flight-segment-info>/gi)];
+
+  if (structuredMatches.length > 0) {
+    console.log(`[lookup] Found ${structuredMatches.length} structured segment blocks`);
+  }
+
+  structuredMatches.forEach((match, index) => {
+    const segmentHtml = match[1];
+    const flightNum = extractFlightNumber(segmentHtml);
+    const depAirport = extractAirport(segmentHtml, "Depart");
+    const arrAirport = extractAirport(segmentHtml, "Arrive");
+    const depTime = extractTime(segmentHtml, "Depart");
+    const arrTime = extractTime(segmentHtml, "Arrive");
+
+    console.log(`[lookup] Structured segment ${index}`, {
+      flightNum,
+      depAirport,
+      arrAirport,
+      depTime,
+      arrTime,
+    });
+
+    if (!flightNum || !isValidFlightNumber(flightNum)) {
+      console.log(`[lookup] Structured segment ${index} missing valid flight number`);
+      return;
     }
 
-    // Look for arrival time near this match
-    const arrTimeMatch = html.substring(match.index, match.index + 500).match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/gi);
-    const arrTime = arrTimeMatch && arrTimeMatch.length > 1 ? arrTimeMatch[1] : null;
-    
-    if (!arrTime) {
-      console.log(`[lookup] No arrival time found for ${flightNum}`);
-      continue;
+    if (!depAirport || !arrAirport || !isValidIATA(depAirport) || !isValidIATA(arrAirport)) {
+      console.log(`[lookup] Structured segment ${index} missing valid airports`);
+      return;
     }
 
-    const departDateTimeIso = baseDate && depTime ? combineDateAndTime(baseDate, depTime) : null;
-    const arriveDateTimeIso = baseDate && arrTime ? combineDateAndTime(baseDate, arrTime) : null;
+    if (!depTime || !arrTime) {
+      console.log(`[lookup] Structured segment ${index} missing depart/arrival times`);
+      return;
+    }
+
+    const segmentBaseDate = baseDate ?? extractSegmentDate(segmentHtml, "Depart") ?? extractSegmentDate(segmentHtml, "Arrive");
+    const departIso = segmentBaseDate ? combineDateAndTime(segmentBaseDate, depTime) : null;
+    let arriveIso = segmentBaseDate ? combineDateAndTime(segmentBaseDate, arrTime) : null;
+    arriveIso = adjustArrivalIfNextDay(departIso, arriveIso);
 
     segments.push({
-      segmentIndex: i,
+      segmentIndex: segments.length,
       flightNumber: flightNum,
       aircraft: null,
       departureAirport: depAirport,
-      departureTime: departDateTimeIso || depTime,
+      departureTime: departIso || depTime,
       departureTerminal: null,
       departureGate: null,
       arrivalAirport: arrAirport,
-      arrivalTime: arriveDateTimeIso || arrTime,
+      arrivalTime: arriveIso || arrTime,
       arrivalTerminal: null,
       arrivalGate: null,
       status: "Scheduled",
       layoverDuration: null,
       isChangeOfPlane: false,
     });
+  });
 
-    console.log(`[lookup] Parsed valid segment ${i}: ${flightNum} ${depAirport} → ${arrAirport}`);
+  if (segments.length > 0) {
+    return segments;
   }
 
+  // Structured parsing failed, fall back to analytics variables embedded in the page
+  const analyticsOriginMatch = html.match(/[&?]v4=([A-Z]{3})/);
+  const analyticsDestMatch = html.match(/[&?]v5=([A-Z]{3})/);
+  const analyticsDateMatch = html.match(/[&?]v10=(\d{2}%2F\d{2}%2F\d{4})/);
+  const analyticsFlightMatch = html.match(/[&?]v91=([A-Z]{2}\d{2,4})/);
+
+  const analyticsDate = analyticsDateMatch ? parseAnalyticsDate(analyticsDateMatch[1]) : null;
+  const fallbackSegmentDate = extractSegmentDate(html, "Depart");
+  const effectiveBaseDate = baseDate ?? analyticsDate ?? fallbackSegmentDate;
+
+  if (analyticsOriginMatch && analyticsDestMatch) {
+    const origin = analyticsOriginMatch[1].toUpperCase();
+    const destination = analyticsDestMatch[1].toUpperCase();
+    const flightNum = analyticsFlightMatch ? analyticsFlightMatch[1].toUpperCase() : null;
+
+    console.log(`[lookup] Analytics data found ${origin} → ${destination}`, {
+      flightNum,
+      analyticsDate: analyticsDate?.toISOString() ?? null,
+    });
+
+    const depTime = extractTime(html, "Depart");
+    const arrTime = extractTime(html, "Arrive");
+
+    console.log("[lookup] Analytics-derived times", { depTime, arrTime });
+
+    if (flightNum && depTime && arrTime && isValidFlightNumber(flightNum) && isValidIATA(origin) && isValidIATA(destination)) {
+      const departIso = effectiveBaseDate ? combineDateAndTime(effectiveBaseDate, depTime) : null;
+      let arriveIso = effectiveBaseDate ? combineDateAndTime(effectiveBaseDate, arrTime) : null;
+      arriveIso = adjustArrivalIfNextDay(departIso, arriveIso);
+
+      segments.push({
+        segmentIndex: 0,
+        flightNumber: flightNum,
+        aircraft: null,
+        departureAirport: origin,
+        departureTime: departIso || depTime,
+        departureTerminal: null,
+        departureGate: null,
+        arrivalAirport: destination,
+        arrivalTime: arriveIso || arrTime,
+        arrivalTerminal: null,
+        arrivalGate: null,
+        status: "Scheduled",
+        layoverDuration: null,
+        isChangeOfPlane: false,
+      });
+
+      return segments;
+    }
+  }
+
+  console.log("[lookup] Could not parse flight segments from HTML");
   return segments;
 }
 
@@ -417,6 +533,14 @@ Deno.serve(async (req) => {
       console.log("[lookup] No base trip date detected; using fallback times");
     }
 
+    const analyticsDateMatch = html.match(/[&?]v10=(\d{2}%2F\d{2}%2F\d{4})/);
+    const analyticsDate = analyticsDateMatch ? parseAnalyticsDate(analyticsDateMatch[1]) : null;
+    if (!baseDate && analyticsDate) {
+      console.log("[lookup] Using analytics date fallback:", analyticsDate.toISOString());
+    }
+
+    const baseDateForSegments = baseDate ?? analyticsDate;
+
     // Extract human-readable total duration first
     const rawDuration = extractWithRegex(html, [
       /total (?:duration|time)[:\s]+([\dh\sm]+)/i,
@@ -425,7 +549,7 @@ Deno.serve(async (req) => {
     const totalDurationMinutes = parseDurationToMinutes(rawDuration);
 
     // Extract flight segments with strict validation FIRST
-    const flights = parseFlightSegments(html, baseDate);
+    const flights = parseFlightSegments(html, baseDateForSegments);
     console.log(`[lookup] Extracted ${flights.length} valid segments`);
 
     // Infer trip type from segments
@@ -445,7 +569,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const tripData: any = {
+    const tripData: TripData = {
       airline: airline.charAt(0).toUpperCase() + airline.slice(1),
       confirmation: confirmationCode,
       tripType: inferredTripType,
@@ -492,6 +616,10 @@ Deno.serve(async (req) => {
         // It's an ISO string, extract the date
         tripData.departureDate = firstDepartTime.split('T')[0];
       }
+    }
+
+    if (!tripData.departureDate && baseDateForSegments) {
+      tripData.departureDate = baseDateForSegments.toISOString().split('T')[0];
     }
 
     const result = {
