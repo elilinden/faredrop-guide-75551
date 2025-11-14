@@ -96,8 +96,8 @@ function parseFlightSegments(html: string, baseDate: Date | null): any[] {
   const segments: any[] = [];
 
   // Look for flight segment blocks with strict pattern matching
-  // Pattern: Flight number followed by route with times
-  const segmentBlockPattern = /(?:Flight|Flt|DL|UA|AA|AS)\s*#?\s*(\d{1,4})\b[\s\S]{0,200}?([A-Z]{3})\s+(?:to|→|-|–)\s+([A-Z]{3})[\s\S]{0,200}?(\d{1,2}:\d{2}\s*(?:AM|PM))[\s\S]{0,100}?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi;
+  // Try multiple patterns for Delta's format
+  const segmentBlockPattern = /(?:Flight|Flt|DL|Delta)\s*#?\s*(\d{1,4})\b[\s\S]{0,500}?([A-Z]{3})\s*(?:to|-|–|→|\/)\s*([A-Z]{3})[\s\S]{0,500}?(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))[\s\S]{0,200}?(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/gi;
   
   const blockMatches = [...html.matchAll(segmentBlockPattern)];
   
@@ -156,20 +156,29 @@ function parseFlightSegments(html: string, baseDate: Date | null): any[] {
     console.log("[lookup] Trying fallback segment parsing...");
     
     // Try to find any text containing flight info patterns
-    // Look for patterns like: "DL 123" or "Flight 123"
-    const flightPattern = /\b(?:DL|Delta)\s*(\d{1,4})\b/gi;
+    // Look for patterns like: "DL 123" or "Flight 123" or "Delta 123"
+    const flightPattern = /(?:DL|Delta|Flight)\s*#?\s*(\d{1,4})\b/gi;
     const flightMatches = [...html.matchAll(flightPattern)];
     console.log(`[lookup] Found ${flightMatches.length} potential flight numbers`);
+    if (flightMatches.length > 0) {
+      console.log(`[lookup] First 5 flight matches:`, flightMatches.slice(0, 5).map(m => m[0]));
+    }
     
-    // Look for airport code pairs (3 capital letters followed by "to" or arrow followed by 3 capital letters)
-    const routePattern = /\b([A-Z]{3})\s*(?:to|-|–|→)\s*([A-Z]{3})\b/g;
+    // Look for airport code pairs - more flexible pattern
+    const routePattern = /\b([A-Z]{3})\s*(?:to|-|–|→|\/)\s*([A-Z]{3})\b/gi;
     const routeMatches = [...html.matchAll(routePattern)];
     console.log(`[lookup] Found ${routeMatches.length} potential routes`);
+    if (routeMatches.length > 0) {
+      console.log(`[lookup] First 5 route matches:`, routeMatches.slice(0, 5).map(m => `${m[1]}-${m[2]}`));
+    }
     
-    // Look for time patterns
+    // Look for time patterns - case insensitive
     const timePattern = /\b(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/gi;
     const timeMatches = [...html.matchAll(timePattern)];
     console.log(`[lookup] Found ${timeMatches.length} potential times`);
+    if (timeMatches.length > 0) {
+      console.log(`[lookup] First 10 time matches:`, timeMatches.slice(0, 10).map(m => m[1]));
+    }
 
     // Try to match them up
     const minCount = Math.min(flightMatches.length, routeMatches.length);
@@ -334,7 +343,8 @@ Deno.serve(async (req) => {
     scrapingBeeUrl.searchParams.set("url", config.url);
     scrapingBeeUrl.searchParams.set("render_js", "true");
     scrapingBeeUrl.searchParams.set("premium_proxy", "true");
-    scrapingBeeUrl.searchParams.set("wait", "5000");
+    scrapingBeeUrl.searchParams.set("wait", "10000"); // Increased wait time for Delta's JS
+    scrapingBeeUrl.searchParams.set("wait_for", ".flight-details,.itinerary,.trip-summary"); // Wait for flight details to load
 
     const response = await fetch(scrapingBeeUrl.toString());
 
@@ -354,8 +364,23 @@ Deno.serve(async (req) => {
     const html = await response.text();
     console.log("[lookup] Received HTML, length:", html.length);
     
-    // Log a sample of the HTML for debugging (first 2000 chars)
-    console.log("[lookup] HTML sample:", html.substring(0, 2000));
+    // Log multiple sections to find where flight data might be
+    console.log("[lookup] HTML start (0-1000):", html.substring(0, 1000));
+    console.log("[lookup] HTML middle section (50000-51000):", html.substring(50000, 51000));
+    console.log("[lookup] HTML later section (100000-101000):", html.substring(100000, 101000));
+    
+    // Try to find JSON data embedded in the page
+    const jsonMatches = html.match(/\{[^{}]*"flight"[^{}]*\}/gi) || [];
+    console.log(`[lookup] Found ${jsonMatches.length} potential JSON flight objects`);
+    if (jsonMatches.length > 0) {
+      console.log("[lookup] Sample JSON:", jsonMatches[0]);
+    }
+    
+    // Look for any airport codes in the HTML
+    const allIATACodes = [...html.matchAll(/\b([A-Z]{3})\b/g)];
+    console.log(`[lookup] Found ${allIATACodes.length} three-letter codes in HTML`);
+    const uniqueCodes = [...new Set(allIATACodes.map(m => m[1]))].slice(0, 20);
+    console.log(`[lookup] Sample codes:`, uniqueCodes.join(", "));
 
     // Extract a base date for segment datetimes
     const baseDate = extractBaseDate(html);
