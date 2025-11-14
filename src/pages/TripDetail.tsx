@@ -656,6 +656,7 @@ const TripDetail = () => {
                 <CardTitle className="text-base">Price Monitoring</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Top row: toggle for monitoring on/off */}
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label htmlFor="monitoring" className="text-sm font-medium">
@@ -666,6 +667,7 @@ const TripDetail = () => {
                   <Switch id="monitoring" checked={monitoringEnabled} onCheckedChange={handleMonitoringToggle} />
                 </div>
 
+                {/* Threshold input only when monitoring is enabled */}
                 {monitoringEnabled && (
                   <div className="space-y-2">
                     <Label htmlFor="threshold" className="text-sm">
@@ -687,6 +689,7 @@ const TripDetail = () => {
                   </div>
                 )}
 
+                {/* Price mode buttons & description — also only when monitoring is enabled */}
                 {monitoringEnabled && (
                   <div className="space-y-2 pt-2 border-t">
                     <Label className="text-sm font-medium">Price check mode</Label>
