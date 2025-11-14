@@ -343,16 +343,16 @@ Deno.serve(async (req) => {
     scrapingBeeUrl.searchParams.set("url", config.url);
     scrapingBeeUrl.searchParams.set("render_js", "true");
     scrapingBeeUrl.searchParams.set("premium_proxy", "true");
-    scrapingBeeUrl.searchParams.set("wait", "10000"); // Increased wait time for Delta's JS
-    scrapingBeeUrl.searchParams.set("wait_for", ".flight-details,.itinerary,.trip-summary"); // Wait for flight details to load
+    scrapingBeeUrl.searchParams.set("wait", "8000"); // Wait for JavaScript to load
 
     const response = await fetch(scrapingBeeUrl.toString());
 
     if (!response.ok) {
-      console.error("[lookup] ScrapingBee error:", response.status, response.statusText);
+      const errorText = await response.text();
+      console.error("[lookup] ScrapingBee error:", response.status, response.statusText, errorText);
       return new Response(
         JSON.stringify({
-          error: `Failed to scrape airline website: ${response.statusText}`,
+          error: `Failed to load airline website (${response.status}). The airline's website may be temporarily unavailable. Please try again in a few moments.`,
         }),
         {
           status: 502,
