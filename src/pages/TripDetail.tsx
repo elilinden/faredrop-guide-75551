@@ -395,29 +395,95 @@ const TripDetail = () => {
                 <CardTitle>Trip Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Top line: airline + route + PNR */}
                 <div>
                   <AirlineBadge airline={trip.airline as AirlineKey} className="mb-2" />
-                  <h2 className="text-xl font-bold">{route}</h2>
-                  <p className="text-sm text-muted-foreground font-mono">{trip.confirmation_code}</p>
+                  <h2 className="text-xl font-bold">{displayRoute}</h2>
+                  <p className="text-sm text-muted-foreground font-mono">
+                    {trip.airline} · {trip.confirmation_code}
+                  </p>
                 </div>
 
+                {/* Core trip facts */}
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span>
-                      {format(new Date(trip.depart_date), "MMM d, yyyy")}
+                      {trip.depart_date ? format(new Date(trip.depart_date), "MMM d, yyyy") : "Trip date not available"}
                       {trip.return_date && ` - ${format(new Date(trip.return_date), "MMM d, yyyy")}`}
                     </span>
                   </div>
+
                   <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-muted-foreground" />
                     <span>Paid: ${trip.paid_total.toFixed(2)}</span>
                   </div>
+
+                  {trip.trip_type && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Trip type:</span>
+                      <span className="font-medium capitalize">{trip.trip_type}</span>
+                    </div>
+                  )}
+
+                  {trip.destination_iata && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Destination:</span>
+                      <span className="font-medium">{trip.destination_iata}</span>
+                    </div>
+                  )}
+
+                  {trip.total_duration_minutes && formatDuration(trip.total_duration_minutes) && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Total duration:</span>
+                      <span className="font-medium">{formatDuration(trip.total_duration_minutes)}</span>
+                    </div>
+                  )}
+
+                  {trip.ticket_expiration && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Ticket expires:</span>
+                      <span className="font-medium">{format(new Date(trip.ticket_expiration), "MMM d, yyyy")}</span>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <p className="text-sm font-medium mb-1">Fare:</p>
-                  <p className="text-sm text-muted-foreground">{trip.brand || "Not specified"}</p>
+                {/* Passenger & fare info from Delta scrape */}
+                <div className="space-y-1 text-sm">
+                  {passengerName && (
+                    <div>
+                      <span className="text-muted-foreground">Passenger:&nbsp;</span>
+                      <span className="font-medium">{passengerName}</span>
+                    </div>
+                  )}
+
+                  {trip.loyalty_status && (
+                    <div>
+                      <span className="text-muted-foreground">Loyalty:&nbsp;</span>
+                      <span className="font-medium">{trip.loyalty_status}</span>
+                    </div>
+                  )}
+
+                  {(trip.fare_class || trip.brand) && (
+                    <div>
+                      <span className="text-muted-foreground">Fare:&nbsp;</span>
+                      <span className="font-medium">{trip.fare_class || trip.brand || "Not specified"}</span>
+                    </div>
+                  )}
+
+                  {trip.eticket_number && (
+                    <div>
+                      <span className="text-muted-foreground">eTicket:&nbsp;</span>
+                      <span className="font-mono text-xs">{trip.eticket_number}</span>
+                    </div>
+                  )}
+
+                  {typeof trip.is_refundable === "boolean" && (
+                    <div>
+                      <span className="text-muted-foreground">Refundable:&nbsp;</span>
+                      <span className="font-medium">{trip.is_refundable ? "Yes" : "No"}</span>
+                    </div>
+                  )}
                 </div>
 
                 <EligibilityPill brand={trip.brand} />
