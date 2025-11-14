@@ -345,20 +345,36 @@ Deno.serve(async (req) => {
     scrapingBeeUrl.searchParams.set("premium_proxy", "true");
     scrapingBeeUrl.searchParams.set("wait", "8000"); // Wait for JavaScript to load
 
-    const response = await fetch(scrapingBeeUrl.toString());
+    let response = await fetch(scrapingBeeUrl.toString());
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[lookup] ScrapingBee error:", response.status, response.statusText, errorText);
-      return new Response(
-        JSON.stringify({
-          error: `Failed to load airline website (${response.status}). The airline's website may be temporarily unavailable. Please try again in a few moments.`,
-        }),
-        {
-          status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      const errText = await response.text().catch(() => "<no body>");
+      console.error("[lookup] ScrapingBee primary attempt failed:", response.status, response.statusText, errText);
+
+      // Fallback attempt: try without JS rendering (some pages render static placeholders)
+      const fallbackUrl = new URL("https://app.scrapingbee.com/api/v1/");
+      fallbackUrl.searchParams.set("api_key", scrapingBeeKey);
+      fallbackUrl.searchParams.set("url", config.url);
+      fallbackUrl.searchParams.set("render_js", "false");
+      fallbackUrl.searchParams.set("premium_proxy", "true");
+      fallbackUrl.searchParams.set("wait", "0");
+
+      console.log("[lookup] Retrying ScrapingBee without JS...");
+      response = await fetch(fallbackUrl.toString());
+
+      if (!response.ok) {
+        const fallbackErrText = await response.text().catch(() => "<no body>");
+        console.error("[lookup] ScrapingBee fallback failed:", response.status, response.statusText, fallbackErrText);
+        // Return a graceful JSON response so UI can handle it without hanging
+        return new Response(
+          JSON.stringify({
+            error: "Airline site could not be loaded right now. Please try again in a few minutes.",
+            scraped: false,
+            flights: [],
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const html = await response.text();

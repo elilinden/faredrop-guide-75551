@@ -486,12 +486,6 @@ const TripDetail = () => {
                     </div>
                   )}
 
-                  {(trip.fare_class || trip.brand) && (
-                    <div>
-                      <span className="text-muted-foreground">Fare:&nbsp;</span>
-                      <span className="font-medium">{trip.fare_class || trip.brand || "Not specified"}</span>
-                    </div>
-                  )}
 
                   {trip.eticket_number && (
                     <div>
