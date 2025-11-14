@@ -10,6 +10,7 @@ import TripNew from "./pages/TripNew";
 import TripEdit from "./pages/TripEdit";
 import TripDetail from "./pages/TripDetail";
 import Settings from "./pages/Settings";
+import Lookup from "./pages/Lookup";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/trips/:id/edit" element={<TripEdit />} />
           <Route path="/trips/:id" element={<TripDetail />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/lookup" element={<Lookup />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
