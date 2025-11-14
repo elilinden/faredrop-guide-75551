@@ -81,69 +81,136 @@ function parseDurationToMinutes(str: string | null): number | null {
   return h * 60 + m;
 }
 
-// Helper to parse flight segments from HTML
+// Helper to validate if a string is a valid 3-letter IATA code
+function isValidIATA(code: string | null): boolean {
+  return !!code && /^[A-Z]{3}$/.test(code);
+}
+
+// Helper to validate if a string is a valid flight number
+function isValidFlightNumber(num: string | null): boolean {
+  return !!num && /^[A-Z]{2}\d+$/.test(num);
+}
+
+// Helper to parse flight segments from HTML with strict validation
 function parseFlightSegments(html: string, baseDate: Date | null): any[] {
   const segments: any[] = [];
 
-  // Try parentheses-style routes first: "(LGA) ... (ATL)"
-  const routePatternParen = /\(([A-Z]{3})\)[\s\S]{0,80}?\(([A-Z]{3})\)/g;
-  let routeMatches = [...html.matchAll(routePatternParen)];
+  // Look for flight segment blocks with strict pattern matching
+  // Pattern: Flight number followed by route with times
+  const segmentBlockPattern = /(?:Flight|Flt|DL|UA|AA|AS)\s*#?\s*(\d{1,4})\b[\s\S]{0,200}?([A-Z]{3})\s+(?:to|→|-|–)\s+([A-Z]{3})[\s\S]{0,200}?(\d{1,2}:\d{2}\s*(?:AM|PM))[\s\S]{0,100}?(\d{1,2}:\d{2}\s*(?:AM|PM))/gi;
+  
+  const blockMatches = [...html.matchAll(segmentBlockPattern)];
+  
+  for (let i = 0; i < blockMatches.length; i++) {
+    const match = blockMatches[i];
+    const flightNum = match[1];
+    const depAirport = match[2];
+    const arrAirport = match[3];
+    const depTime = match[4];
+    const arrTime = match[5];
 
-  // Fallback to "LGA to ATL" style if needed
-  if (routeMatches.length === 0) {
-    const routePatternArrow = /([A-Z]{3})\s*(?:to|→|->|–)\s*([A-Z]{3})/gi;
-    routeMatches = [...html.matchAll(routePatternArrow)];
-  }
+    // Validate IATA codes
+    if (!isValidIATA(depAirport) || !isValidIATA(arrAirport)) {
+      console.log(`[lookup] Skipping invalid segment: ${depAirport} → ${arrAirport}`);
+      continue;
+    }
 
-  // Try to extract flight numbers
-  const flightPattern = /(?:Flight|Flt)[\s:]+([A-Z]{2}[\s-]?\d+)/gi;
-  const flightMatches = [...html.matchAll(flightPattern)];
+    // Build full flight number (assuming DL for Delta, adjust per airline)
+    const fullFlightNumber = `DL${flightNum}`;
+    
+    if (!isValidFlightNumber(fullFlightNumber)) {
+      console.log(`[lookup] Skipping invalid flight number: ${fullFlightNumber}`);
+      continue;
+    }
 
-  // Try to extract times
-  const timePattern = /(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)/gi;
-  const timeMatches = [...html.matchAll(timePattern)];
+    // Convert times to ISO if we have a base date
+    const departDateTimeIso = baseDate && depTime ? combineDateAndTime(baseDate, depTime) : null;
+    const arriveDateTimeIso = baseDate && arrTime ? combineDateAndTime(baseDate, arrTime) : null;
 
-  // Try to match aircraft types
-  const aircraftPattern = /(?:Aircraft|Plane|Equipment)[\s:]+([A-Z0-9-]+)/gi;
-  const aircraftMatches = [...html.matchAll(aircraftPattern)];
-
-  const segmentCount = Math.max(flightMatches.length, routeMatches.length, 1);
-
-  for (let i = 0; i < segmentCount; i++) {
-    const flightMatch = flightMatches[i];
-    const routeMatch = routeMatches[i];
-    const depTimeMatch = timeMatches[i * 2];
-    const arrTimeMatch = timeMatches[i * 2 + 1];
-    const aircraftMatch = aircraftMatches[i];
-
-    const depAirport = routeMatch ? routeMatch[1] : null;
-    const arrAirport = routeMatch ? routeMatch[2] : null;
-
-    const depTimeDisplay = depTimeMatch ? depTimeMatch[1] : null;
-    const arrTimeDisplay = arrTimeMatch ? arrTimeMatch[1] : null;
-
-    // If we have a base date, convert to ISO; otherwise keep display string
-    const departDateTimeIso = baseDate && depTimeDisplay ? combineDateAndTime(baseDate, depTimeDisplay) : null;
-    const arriveDateTimeIso = baseDate && arrTimeDisplay ? combineDateAndTime(baseDate, arrTimeDisplay) : null;
+    // Look for aircraft info near this segment
+    const aircraftMatch = match[0].match(/(?:Aircraft|Equipment)[\s:]+([A-Z0-9-]{3,10})/i);
+    const statusMatch = match[0].match(/(?:On Time|Delayed|Cancelled)/i);
 
     segments.push({
       segmentIndex: i,
-      flightNumber: flightMatch ? flightMatch[1].replace(/\s+/g, "") : null,
+      flightNumber: fullFlightNumber,
       aircraft: aircraftMatch ? aircraftMatch[1] : null,
       departureAirport: depAirport,
-      // IMPORTANT: keep the field name `departureTime` but make it ISO when possible
-      // so TripDetail can use it as a datetime
-      departureTime: departDateTimeIso || depTimeDisplay,
+      departureTime: departDateTimeIso || depTime,
       departureTerminal: null,
       departureGate: null,
       arrivalAirport: arrAirport,
-      arrivalTime: arriveDateTimeIso || arrTimeDisplay,
+      arrivalTime: arriveDateTimeIso || arrTime,
       arrivalTerminal: null,
       arrivalGate: null,
-      status: html.match(/(?:on time|delayed|cancelled)/i)?.[0] || "Scheduled",
+      status: statusMatch ? statusMatch[0] : "Scheduled",
       layoverDuration: null,
       isChangeOfPlane: false,
     });
+
+    console.log(`[lookup] Parsed valid segment ${i}: ${fullFlightNumber} ${depAirport} → ${arrAirport}`);
+  }
+
+  // If the complex pattern didn't work, try a simpler fallback with strict validation
+  if (segments.length === 0) {
+    console.log("[lookup] Trying fallback segment parsing...");
+    
+    // Find all potential flight numbers
+    const flightPattern = /(?:Flight|Flt|DL)\s*#?\s*(\d{1,4})\b/gi;
+    const flightMatches = [...html.matchAll(flightPattern)];
+    
+    // Find all IATA pairs
+    const routePattern = /\b([A-Z]{3})\s+(?:to|→|-|–)\s+([A-Z]{3})\b/g;
+    const routeMatches = [...html.matchAll(routePattern)];
+    
+    // Find all times
+    const timePattern = /\b(\d{1,2}:\d{2}\s*(?:AM|PM))\b/gi;
+    const timeMatches = [...html.matchAll(timePattern)];
+
+    // Match them up with strict validation
+    const minCount = Math.min(flightMatches.length, routeMatches.length);
+    
+    for (let i = 0; i < minCount; i++) {
+      const flightNum = `DL${flightMatches[i][1]}`;
+      const depAirport = routeMatches[i][1];
+      const arrAirport = routeMatches[i][2];
+      
+      // Strict validation
+      if (!isValidFlightNumber(flightNum) || !isValidIATA(depAirport) || !isValidIATA(arrAirport)) {
+        console.log(`[lookup] Fallback: Skipping invalid segment ${i}`);
+        continue;
+      }
+
+      const depTime = timeMatches[i * 2]?.[1];
+      const arrTime = timeMatches[i * 2 + 1]?.[1];
+
+      if (!depTime || !arrTime) {
+        console.log(`[lookup] Fallback: Missing times for segment ${i}`);
+        continue;
+      }
+
+      const departDateTimeIso = baseDate && depTime ? combineDateAndTime(baseDate, depTime) : null;
+      const arriveDateTimeIso = baseDate && arrTime ? combineDateAndTime(baseDate, arrTime) : null;
+
+      segments.push({
+        segmentIndex: i,
+        flightNumber: flightNum,
+        aircraft: null,
+        departureAirport: depAirport,
+        departureTime: departDateTimeIso || depTime,
+        departureTerminal: null,
+        departureGate: null,
+        arrivalAirport: arrAirport,
+        arrivalTime: arriveDateTimeIso || arrTime,
+        arrivalTerminal: null,
+        arrivalGate: null,
+        status: "Scheduled",
+        layoverDuration: null,
+        isChangeOfPlane: false,
+      });
+
+      console.log(`[lookup] Fallback: Parsed segment ${i}: ${flightNum} ${depAirport} → ${arrAirport}`);
+    }
   }
 
   return segments;
@@ -295,15 +362,20 @@ Deno.serve(async (req) => {
     ]);
     const totalDurationMinutes = parseDurationToMinutes(rawDuration);
 
-    // Extract trip-level data using regex patterns
+    // Extract trip-level data using regex patterns with better validation
+    const rawTripType = extractWithRegex(html, [/trip type[:\s]+(\w+)/i, /(one-way|round-trip|roundtrip|multi-city)/i]);
+    const normalizedTripType = rawTripType ? 
+      (rawTripType.toLowerCase().includes("round") ? "round-trip" : 
+       rawTripType.toLowerCase().includes("one") ? "one-way" :
+       rawTripType.toLowerCase().includes("multi") ? "multi-city" : null) : null;
+
     const tripData: any = {
       airline: airline.charAt(0).toUpperCase() + airline.slice(1),
       confirmation: confirmationCode,
-      tripType: extractWithRegex(html, [/trip type[:\s]+(\w+)/i, /(\w+)\s+trip/i]) || "round-trip",
-      destination: extractWithRegex(html, [/destination[:\s]+([A-Z]{3})/i, /to[:\s]+([A-Z]{3})/i]) || null,
+      tripType: normalizedTripType,
+      destination: null, // Will be set from last segment below
       ticketExpiration: extractWithRegex(html, [/ticket expires?[:\s]+([\w\s,]+)/i, /expiration[:\s]+([\w\s,]+)/i]),
-      fullRoute: extractWithRegex(html, [/route[:\s]+([\w\s\u2192\u2013\-\>]+)/i]),
-      // IMPORTANT: return duration as *minutes* (string) so parseInt() in AddFlightModal is correct
+      fullRoute: null, // Will be built from segments below
       totalDuration: totalDurationMinutes !== null ? String(totalDurationMinutes) : null,
       passengerName: `${firstName || ""} ${lastName}`.trim(),
       loyaltyStatus: extractWithRegex(html, [/(?:skymiles|frequent flyer|loyalty)[:\s]+(\w+)/i, /(\w+)\s+member/i]),
@@ -312,11 +384,13 @@ Deno.serve(async (req) => {
       isRefundable: html.toLowerCase().includes("refundable") && !html.toLowerCase().includes("non-refundable"),
     };
 
-    // Extract flight segments
+    // Extract flight segments with strict validation
     const flights = parseFlightSegments(html, baseDate);
 
-    // If we didn't get fullRoute above, build from segments (LGA → ATL → TQO)
-    if ((!tripData.fullRoute || tripData.fullRoute.length === 0) && flights.length > 0) {
+    console.log(`[lookup] Extracted ${flights.length} valid segments`);
+
+    // Build fullRoute from valid segments only
+    if (flights.length > 0) {
       const codes: string[] = [];
       flights.forEach((seg, idx) => {
         if (idx === 0 && seg.departureAirport) {
@@ -327,15 +401,24 @@ Deno.serve(async (req) => {
         }
       });
       if (codes.length > 0) {
-        tripData.fullRoute = codes.join(" \u2192 "); // →
+        tripData.fullRoute = codes.join(" → ");
       }
     }
 
-    // If no destination but we have segments, use the last arrival airport as destination IATA
-    if (!tripData.destination && flights.length > 0) {
+    // Set destination from last valid segment
+    if (flights.length > 0) {
       const lastSeg = flights[flights.length - 1];
-      if (lastSeg.arrivalAirport) {
+      if (lastSeg.arrivalAirport && isValidIATA(lastSeg.arrivalAirport)) {
         tripData.destination = lastSeg.arrivalAirport;
+      }
+    }
+
+    // Set departure date from first valid segment
+    if (flights.length > 0 && flights[0].departureTime) {
+      const firstDepartTime = flights[0].departureTime;
+      if (typeof firstDepartTime === 'string' && firstDepartTime.includes('T')) {
+        // It's an ISO string, extract the date
+        tripData.departureDate = firstDepartTime.split('T')[0];
       }
     }
 
