@@ -4,7 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plane } from "lucide-react";
 import { logAudit } from "@/lib/audit";
@@ -72,7 +79,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validation
     if (!formData.confirmationCode || formData.confirmationCode.length !== 6) {
       toast({
@@ -114,7 +121,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
 
     try {
       // Step 1: Call the lookup function to scrape flight details
-      const { data: lookupData, error: lookupError } = await supabase.functions.invoke('lookup', {
+      const { data: lookupData, error: lookupError } = await supabase.functions.invoke("lookup", {
         body: {
           confirmationCode: formData.confirmationCode.toUpperCase(),
           firstName: formData.firstName.toUpperCase(),
@@ -134,11 +141,13 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
       const result: LookupResult = lookupData;
 
       // Step 2: Get the airline code
-      const airlineConfig = airlines.find(a => a.value === formData.airline);
+      const airlineConfig = airlines.find((a) => a.value === formData.airline);
       const airlineCode = airlineConfig?.code || formData.airline.toUpperCase();
 
       // Step 3: Check if trip already exists, then create or update
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         throw new Error("Not authenticated");
       }
@@ -174,7 +183,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
             paid_total: parseFloat(formData.flightCost),
             trip_type: result.tripType || null,
             destination_iata: result.destination || null,
-            departure_date: result.departureDate || null,
+            depart_date: result.departureDate || null,
             ticket_expiration: result.ticketExpiration || null,
             full_route: result.fullRoute || null,
             total_duration_minutes: result.totalDuration ? parseInt(result.totalDuration) : null,
@@ -188,7 +197,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
         if (updateError) throw new Error(updateError.message);
       } else {
         console.log("[AddFlight] Creating new trip...");
-        
+
         // Insert new trip
         const { data: tripData, error: tripError } = await supabase
           .from("trips")
@@ -203,7 +212,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
             monitoring_enabled: true,
             trip_type: result.tripType || null,
             destination_iata: result.destination || null,
-            departure_date: result.departureDate || null,
+            depart_date: result.departureDate || null, // ⬅️ FIX HERE
             ticket_expiration: result.ticketExpiration || null,
             full_route: result.fullRoute || null,
             total_duration_minutes: result.totalDuration ? parseInt(result.totalDuration) : null,
@@ -217,7 +226,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
 
         if (tripError) throw new Error(tripError.message);
         if (!tripData) throw new Error("Failed to create trip");
-        
+
         tripId = tripData.id;
       }
 
@@ -225,15 +234,18 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
       if (result.flights && result.flights.length > 0) {
         // Filter out junk segments - only keep those with valid flight numbers and airports
         const validFlights = result.flights.filter(
-          (f: any) => f.flightNumber && 
-                     f.flightNumber !== "TBD" && 
-                     f.departureAirport && 
-                     f.arrivalAirport &&
-                     f.departureAirport.length === 3 &&
-                     f.arrivalAirport.length === 3
+          (f: any) =>
+            f.flightNumber &&
+            f.flightNumber !== "TBD" &&
+            f.departureAirport &&
+            f.arrivalAirport &&
+            f.departureAirport.length === 3 &&
+            f.arrivalAirport.length === 3,
         );
 
-        console.log(`[AddFlight] Inserting ${validFlights.length} valid segments out of ${result.flights.length} total`);
+        console.log(
+          `[AddFlight] Inserting ${validFlights.length} valid segments out of ${result.flights.length} total`,
+        );
 
         if (validFlights.length > 0) {
           const segments = validFlights.map((flight: any, index: number) => ({
@@ -255,9 +267,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
             segment_index: index,
           }));
 
-          const { error: segmentsError } = await supabase
-            .from("segments")
-            .insert(segments);
+          const { error: segmentsError } = await supabase.from("segments").insert(segments);
 
           if (segmentsError) {
             console.error("Error creating segments:", segmentsError);
@@ -283,7 +293,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
         airline: "",
         flightCost: "",
       });
-      
+
       onSuccess();
       onOpenChange(false);
     } catch (err: any) {
@@ -298,7 +308,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
     }
   };
 
-  const isFormValid = 
+  const isFormValid =
     formData.confirmationCode.length === 6 &&
     formData.lastName &&
     formData.airline &&
@@ -321,12 +331,7 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="airline">Airline *</Label>
-            <Select
-              value={formData.airline}
-              onValueChange={(value) =>
-                setFormData({ ...formData, airline: value })
-              }
-            >
+            <Select value={formData.airline} onValueChange={(value) => setFormData({ ...formData, airline: value })}>
               <SelectTrigger id="airline">
                 <SelectValue placeholder="Select airline" />
               </SelectTrigger>
@@ -412,18 +417,10 @@ export function AddFlightModal({ open, onOpenChange, onSuccess }: AddFlightModal
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={!isFormValid || loading}
-            >
+            <Button type="submit" disabled={!isFormValid || loading}>
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
