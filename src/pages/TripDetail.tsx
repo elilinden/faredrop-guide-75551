@@ -165,11 +165,15 @@ const TripDetail = () => {
     [trip.first_name, trip.last_name].filter(Boolean).join(" ") ||
     null;
 
+  // Filter out junk segments (all the DL TBD noise coming from the scraper)
+  const validSegments = segments.filter((seg) => seg.flight_number && seg.flight_number !== "TBD");
+
+  // Use only valid segments for the display route.
+  // If none, just show a neutral placeholder instead of the "rip → tal → ..." mess.
   const displayRoute =
-    trip.full_route ||
-    (segments.length > 0
-      ? `${segments[0].depart_airport} → ${segments[segments.length - 1].arrive_airport}`
-      : "Route details");
+    validSegments.length > 0
+      ? `${validSegments[0].depart_airport} → ${validSegments[validSegments.length - 1].arrive_airport}`
+      : "Route details";
 
   const handleMonitoringToggle = async (enabled: boolean) => {
     try {
@@ -587,7 +591,7 @@ const TripDetail = () => {
                     </>
                   )}
 
-                  {segments.length === 0 && (
+                  {validSegments.length === 0 && (
                     <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md p-3">
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -610,7 +614,7 @@ const TripDetail = () => {
                           <div className="flex-1">
                             <Button
                               onClick={handleCheckNow}
-                              disabled={isCheckingNow || segments.length === 0}
+                              disabled={isCheckingNow || validSegments.length === 0}
                               size="sm"
                               variant="outline"
                               className="w-full"
@@ -629,7 +633,7 @@ const TripDetail = () => {
                             </Button>
                           </div>
                         </TooltipTrigger>
-                        {segments.length === 0 && (
+                        {validSegments.length === 0 && (
                           <TooltipContent>
                             <p>Add flight segments to enable price checking</p>
                           </TooltipContent>
@@ -727,7 +731,7 @@ const TripDetail = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {segments.map((seg) => (
+                  {validSegments.map((seg) => (
                     <div key={seg.id} className="text-sm">
                       <div className="font-medium">
                         {seg.carrier} {seg.flight_number}
