@@ -298,14 +298,14 @@ const TripEdit = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <div className="container mx-auto flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
             <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
               <Plane className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
           </Link>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild className="w-full sm:w-auto">
             <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>
@@ -433,9 +433,9 @@ const TripEdit = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-3">
                   {segments.map((seg, idx) => (
-                    <Card key={idx} className="p-4 bg-muted/50">
-                      <CardContent className="p-0 space-y-3">
-                        <div className="flex items-center justify-between mb-2">
+                    <Card key={idx} className="bg-muted/50 p-4">
+                      <CardContent className="space-y-3 p-0">
+                        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <span className="text-sm font-medium">Segment {idx + 1}</span>
                           <Button
                             type="button"
@@ -447,7 +447,7 @@ const TripEdit = () => {
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
                           <div>
                             <Label className="text-xs">Carrier</Label>
                             <Input
@@ -621,11 +621,11 @@ const TripEdit = () => {
             </Card>
           </Collapsible>
 
-          <div className="flex gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate(`/trips/${id}`)} className="flex-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+            <Button type="button" variant="outline" onClick={() => navigate(`/trips/${id}`)} className="w-full flex-1">
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="flex-1">
+            <Button type="submit" disabled={loading} className="w-full flex-1">
               {loading ? "Saving..." : "Update Trip"}
             </Button>
           </div>
