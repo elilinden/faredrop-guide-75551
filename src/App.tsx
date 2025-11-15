@@ -23,6 +23,7 @@ import About from "./pages/About";
 import AuthLanding from "./pages/AuthLanding";
 import AuthCallback from "./pages/AuthCallback";
 import AuthDebug from "./pages/AuthDebug";
+import ResetPassword from "./pages/ResetPassword";
 import { useAuthListener } from "@/hooks/useAuthListener";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => {
             <Route path="/auth" element={<AuthLanding />} />
             <Route path="/sign-in" element={<Auth />} />
             <Route path="/login" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/trips/new" element={<TripNew />} />
             <Route path="/trips/:id/edit" element={<TripEdit />} />
