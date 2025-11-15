@@ -17,3 +17,9 @@ verify_jwt = true
 
 [functions.contact-message]
 verify_jwt = false
+
+[functions.delta-manage-scrape]
+verify_jwt = true
+
+[functions.check-delta-fare]
+verify_jwt = true
