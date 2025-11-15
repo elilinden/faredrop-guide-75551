@@ -72,10 +72,12 @@ function extractFlightNumbers(text: string): string[] {
   return Array.from(set);
 }
 
-export function parseDeltaMyTripsHTML(html: string): ParsedTripDelta {
-  const out: ParsedTripDelta = { confidence: "unknown" };
+export function parseDeltaMyTripsHTML(html: string, opts?: { debug?: boolean }): ParsedTripDelta & { _debug?: any } {
+  const out: ParsedTripDelta & { _debug?: any } = { confidence: "unknown" };
+  const _debug: Record<string, unknown> = {};
 
   const beaconParams = parseBeaconParams(html);
+  _debug.beaconFound = !!beaconParams;
   if (beaconParams) {
     out.pnr = beaconParams.get("v91") ?? undefined;
     out.origin_iata = beaconParams.get("v4") ?? undefined;
@@ -99,17 +101,26 @@ export function parseDeltaMyTripsHTML(html: string): ParsedTripDelta {
     if (pnrMatch) out.pnr = pnrMatch[1];
   }
 
+  let routeMatch: RegExpMatchArray | null = null;
   if (!out.origin_iata || !out.destination_iata) {
-    const routeMatch = bodyText.match(/\b([A-Z]{3})\s*[-–>\u2192]\s*([A-Z]{3})\b/);
+    routeMatch = bodyText.match(/\b([A-Z]{3})\s*[-–>\u2192]\s*([A-Z]{3})\b/);
     if (routeMatch) {
       if (!out.origin_iata) out.origin_iata = routeMatch[1];
       if (!out.destination_iata) out.destination_iata = routeMatch[2];
     }
   }
+  _debug.routeRegexHit = !!routeMatch;
 
   const flightNumbers = extractFlightNumbers(bodyText);
   if (flightNumbers.length) {
     out.flight_numbers = flightNumbers;
+  }
+
+  _debug.flightNumbers = flightNumbers;
+  _debug.snippet = stripHtml(html).slice(0, 800);
+
+  if (opts?.debug) {
+    out._debug = _debug;
   }
 
   return out;
