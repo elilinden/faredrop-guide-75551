@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
 interface LivePriceButtonProps {
   tripId: string;
@@ -13,36 +14,33 @@ export function LivePriceButton({ tripId, onUpdate }: LivePriceButtonProps) {
   const run = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/functions/v1/check-delta-fare", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ trip_id: tripId }),
+      const { data, error } = await supabase.functions.invoke("check-delta-fare", {
+        body: { trip_id: tripId },
       });
 
-      const data = await res.json().catch(() => null);
+      if (error || !data) {
+        console.error("check-delta-fare error", error);
+        setLast("Error");
+        return;
+      }
 
-      if (res.ok && data?.ok && data?.trip) {
-        const price = typeof data.trip.last_live_price === "number" ? data.trip.last_live_price : null;
+      if (data.ok && data.trip) {
+        const priceValue = typeof data.trip.last_live_price === "number"
+          ? data.trip.last_live_price
+          : Number.parseFloat(String(data.trip.last_live_price ?? ""));
         const currency = data.trip.last_live_price_currency ?? "USD";
         const source = data.trip.last_live_source ?? "unknown";
         const confidence = data.trip.live_price_confidence ?? "unknown";
 
-        const formattedPrice = price != null
-          ? (() => {
-              try {
-                return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(price);
-              } catch {
-                return `$${price.toFixed(2)}`;
-              }
-            })()
+        const formattedPrice = Number.isFinite(priceValue)
+          ? new Intl.NumberFormat("en-US", { style: "currency", currency }).format(priceValue)
           : null;
 
         const parts = [formattedPrice, source, confidence].filter(Boolean);
         setLast(parts.join(" · "));
         onUpdate?.();
       } else {
-        const reason = data?.reason || data?.error || "not_found";
-        setLast(reason === "price_not_found" ? "Not found" : "Error");
+        setLast(data.reason === "price_not_found" ? "Not found" : "Error");
       }
     } catch (error) {
       console.error("Failed to check live price", error);
@@ -53,13 +51,11 @@ export function LivePriceButton({ tripId, onUpdate }: LivePriceButtonProps) {
   };
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <Button onClick={run} disabled={loading} className="h-9 px-3 text-sm font-medium">
-          {loading ? "Checking…" : "Check live price"}
-        </Button>
-        {last && <span className="text-xs text-muted-foreground">Last: {last}</span>}
-      </div>
+    <div className="flex items-center gap-2">
+      <Button onClick={run} disabled={loading} className="h-9 px-3 text-sm font-medium">
+        {loading ? "Checking…" : "Check live price"}
+      </Button>
+      {last && <span className="text-xs text-muted-foreground">Last: {last}</span>}
     </div>
   );
 }

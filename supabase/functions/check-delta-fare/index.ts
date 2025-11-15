@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 const BEE_URL = "https://app.scrapingbee.com/api/v1/";
@@ -19,6 +20,7 @@ interface TripRecord {
   departure_date?: string | null;
   flight_numbers?: string[] | null;
   brand?: string | null;
+  last_live_checked_at?: string | null;
 }
 
 interface BeeResponse {
@@ -49,30 +51,55 @@ function parseUsd(input: string | undefined | null): number | null {
   return Number.parseFloat(match[1].replace(/,/g, ""));
 }
 
+function toText(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (item == null ? "" : String(item)))
+      .filter((item) => item.trim().length > 0)
+      .join(" ");
+  }
+  if (value == null) return "";
+  return String(value);
+}
+
 async function fetchBee(apiKey: string, body: Record<string, unknown>): Promise<BeeResponse | string | null> {
   const url = `${BEE_URL}?api_key=${apiKey}`;
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  const maxAttempts = 2;
 
-    if (!response.ok) {
-      console.error(`[check-delta-fare] ScrapingBee error: ${response.status}`);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        if ((response.status === 429 || response.status >= 500) && attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+          continue;
+        }
+        console.error(`[check-delta-fare] ScrapingBee non-200 status: ${response.status}`);
+        return null;
+      }
+
+      const contentType = response.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json")) {
+        return (await response.json()) as BeeResponse;
+      }
+
+      return await response.text();
+    } catch (error) {
+      console.error("[check-delta-fare] ScrapingBee request failed", error);
+      if (attempt < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        continue;
+      }
       return null;
     }
-
-    const contentType = response.headers.get("content-type") ?? "";
-    if (contentType.includes("application/json")) {
-      return (await response.json()) as BeeResponse;
-    }
-
-    return await response.text();
-  } catch (error) {
-    console.error("[check-delta-fare] ScrapingBee request failed", error);
-    return null;
   }
+
+  return null;
 }
 
 function cleanFlightNumber(value: string | undefined): string | null {
@@ -134,7 +161,19 @@ Deno.serve(async (req) => {
   const { data: tripData, error: tripError } = await supabaseClient
     .from("trips")
     .select(
-      "id, airline, confirmation_code, first_name, last_name, origin_iata, destination_iata, departure_date, flight_numbers, brand"
+      [
+        "id",
+        "airline",
+        "confirmation_code",
+        "first_name",
+        "last_name",
+        "origin_iata",
+        "destination_iata",
+        "departure_date",
+        "flight_numbers",
+        "brand",
+        "last_live_checked_at",
+      ].join(", ")
     )
     .eq("id", tripId)
     .maybeSingle();
@@ -152,6 +191,13 @@ Deno.serve(async (req) => {
 
   if (trip.airline !== "DL") {
     return jsonResponse(400, { ok: false, error: "Only DL supported" });
+  }
+
+  if (trip.last_live_checked_at) {
+    const lastChecked = new Date(trip.last_live_checked_at).getTime();
+    if (!Number.isNaN(lastChecked) && Date.now() - lastChecked < 5 * 60 * 1000) {
+      return jsonResponse(200, { ok: false, reason: "cooldown" });
+    }
   }
 
   const flightNumbers = Array.isArray(trip.flight_numbers)
@@ -174,8 +220,17 @@ Deno.serve(async (req) => {
       { type: "type", css: "input[name='firstName']", text: trip.first_name },
       { type: "type", css: "input[name='lastName']", text: trip.last_name },
       { type: "click", css: "button[type='submit'], button[data-qa='find-my-trip-submit']" },
-      { type: "wait", css: "button:has-text('Change'), a:has-text('Change')" },
-      { type: "click", css: "button:has-text('Change'), a:has-text('Change')" },
+      { type: "click", xpath: "//button[@type='submit' or contains(., 'Find My Trip')]" },
+      {
+        type: "wait",
+        css: "button[data-qa='change-flight'], a[data-qa='change-flight'], button[data-testid='changeButton']",
+      },
+      { type: "wait", xpath: "//button[contains(., 'Change')] | //a[contains(., 'Change')]" },
+      {
+        type: "click",
+        css: "button[data-qa='change-flight'], a[data-qa='change-flight'], button[data-testid='changeButton']",
+      },
+      { type: "click", xpath: "//button[contains(., 'Change')] | //a[contains(., 'Change')]" },
       {
         type: "wait_for",
         expression: "document.body.innerText.match(/\\$\\s?\\d{1,3}(,\\d{3})*(\\.\\d{2})?/)",
@@ -183,12 +238,15 @@ Deno.serve(async (req) => {
     ];
 
     const extract_rules = {
+      whole: { selector: ".mach-revenue-price__whole", type: "text" },
+      decimal: { selector: ".mach-revenue-price__decimal", type: "text" },
       priceA: {
         selector:
           "[data-qa='price-difference'], .price-difference, .amount-due, .credit-amount, .residual-value-amount",
         type: "text",
       },
       priceB: { selector: ".total-amount, .totalPrice, .money, [class*='Price']", type: "text" },
+      any: { selector: "[class*='amount'], [class*='price'], .money", type: "text" },
       html: { selector: "html", type: "text" },
     };
 
@@ -211,8 +269,19 @@ Deno.serve(async (req) => {
     if (typeof payload === "string") {
       text = payload;
     } else if (payload?.extracted_data) {
-      const { extracted_data } = payload;
-      text = String(extracted_data.priceA || extracted_data.priceB || extracted_data.html || "");
+      const d = payload.extracted_data as Record<string, unknown>;
+      const whole = toText(d.whole).trim();
+      const decimal = toText(d.decimal).trim().replace(/^\./, ".");
+      const combinedFromMach = `${whole}${decimal}`;
+      text = [
+        combinedFromMach.trim().length > 0 ? combinedFromMach : null,
+        toText(d.priceA),
+        toText(d.priceB),
+        toText(d.any),
+        toText(d.html),
+      ]
+        .filter((value) => typeof value === "string" && value.trim().length > 0)
+        .join("\n");
     }
 
     const price = parseUsd(text);
@@ -242,7 +311,8 @@ Deno.serve(async (req) => {
       { type: "wait", css: "input[name='fromCity'], input[aria-label='From']" },
       { type: "type", css: "input[name='fromCity'], input[aria-label='From']", text: trip.origin_iata },
       { type: "type", css: "input[name='toCity'], input[aria-label='To']", text: trip.destination_iata },
-      { type: "click", css: "button:has-text('One Way'), [role='tab'][aria-controls*='ONE_WAY']" },
+      { type: "click", css: "button[data-qa='one-way'], [role='tab'][aria-controls*='ONE_WAY']" },
+      { type: "click", xpath: "//button[contains(., 'One Way')] | //div[@role='tab' and contains(., 'One Way')]" },
       { type: "click", css: "input[name='passengers']" },
       { type: "click", css: "input[name='departureDate'], input[aria-label='Departure date']" },
       {
@@ -250,7 +320,13 @@ Deno.serve(async (req) => {
         css: "input[name='departureDate'], input[aria-label='Departure date']",
         text: formattedSearchDate,
       },
-      { type: "click", css: "button:has-text('Search'), button[type='submit']" },
+      {
+        type: "type",
+        xpath: "//input[@name='departureDate' or @aria-label='Departure date']",
+        text: formattedSearchDate,
+      },
+      { type: "click", css: "button[data-qa='search-flight'], button[type='submit']" },
+      { type: "click", xpath: "//button[@type='submit' or contains(., 'Search')]" },
       { type: "wait", css: "body" },
       {
         type: "wait_for",
@@ -259,8 +335,15 @@ Deno.serve(async (req) => {
     ];
 
     const extract_rules = {
-      main: { selector: ".fare-card .amount, .main .amount, [data-qa*='main-cabin'] .amount", type: "text" },
-      any: { selector: "[class*='amount'], [class*='Price'], .money, .price", type: "text" },
+      whole: { selector: ".mach-revenue-price__whole", type: "text" },
+      decimal: { selector: ".mach-revenue-price__decimal", type: "text" },
+      priceA: {
+        selector:
+          "[data-qa='price-difference'], .price-difference, .amount-due, .credit-amount, .residual-value-amount",
+        type: "text",
+      },
+      priceB: { selector: ".total-amount, .totalPrice, .money, [class*='Price']", type: "text" },
+      any: { selector: "[class*='amount'], [class*='price'], .money", type: "text" },
       html: { selector: "html", type: "text" },
     };
 
@@ -283,10 +366,18 @@ Deno.serve(async (req) => {
     if (typeof payload === "string") {
       text = payload;
     } else if (payload?.extracted_data) {
-      const { extracted_data } = payload;
-      text = [extracted_data.main, extracted_data.any, extracted_data.html]
-        .filter(Boolean)
-        .map((value) => String(value))
+      const d = payload.extracted_data as Record<string, unknown>;
+      const whole = toText(d.whole).trim();
+      const decimal = toText(d.decimal).trim().replace(/^\./, ".");
+      const combinedFromMach = `${whole}${decimal}`;
+      text = [
+        combinedFromMach.trim().length > 0 ? combinedFromMach : null,
+        toText(d.priceA),
+        toText(d.priceB),
+        toText(d.any),
+        toText(d.html),
+      ]
+        .filter((value) => typeof value === "string" && value.trim().length > 0)
         .join("\n");
     }
 
