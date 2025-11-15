@@ -98,9 +98,32 @@ const Index = () => {
         </div>
       </main>
 
-      <footer className="container mx-auto px-4 py-8 mt-16 border-t">
-        <div className="text-center text-sm text-muted-foreground">
+      <footer className="container mx-auto mt-16 border-t px-4 py-8">
+        <div className="flex flex-col items-center gap-4 text-center text-sm text-muted-foreground md:flex-row md:justify-between md:text-left">
           <p>© 2025 FareDrop Guide. Track smarter, save more.</p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/faq")}>
+              FAQs
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/blog")}>
+              Blog
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/about")}>
+              About Us
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/contact")}>
+              Contact Us
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/terms")}>
+              Terms of Service
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/privacy")}>
+              Privacy Policy
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/cookies")}>
+              Cookie Settings
+            </Button>
+          </div>
         </div>
       </footer>
     </div>
