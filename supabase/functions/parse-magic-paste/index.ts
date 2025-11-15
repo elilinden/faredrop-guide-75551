@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { parseDeltaMyTripsHTML } from "../../../src/lib/parsers/airlines/delta.ts";
 
 type Cabin = "ECONOMY" | "PREMIUM_ECONOMY" | "BUSINESS" | "FIRST";
 
@@ -17,6 +18,7 @@ type ParsedTrip = {
   flight_numbers?: string[];
   adults?: number | null;
   cabin?: Cabin | null;
+  last_confidence?: "exact-flight" | "route-estimate" | "unknown";
 };
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -126,6 +128,44 @@ function validateForPricing(trip: Partial<ParsedTrip>) {
   if (!trip.destination_iata || !/^[A-Z]{3}$/.test(trip.destination_iata)) errs.push("destination_iata");
   if (!trip.departure_date || !/^\d{4}-\d{2}-\d{2}$/.test(trip.departure_date)) errs.push("departure_date");
   return errs;
+}
+
+function applyDeltaParsingIfApplicable(rawHtml: string, draft: Partial<ParsedTrip>) {
+  const looksLikeHtml = /<[a-z][^>]*>/i.test(rawHtml);
+  const mentionsDelta = /delta/i.test(rawHtml);
+  if (!looksLikeHtml || !mentionsDelta) return;
+
+  const parsed = parseDeltaMyTripsHTML(rawHtml);
+  const summary = {
+    pnr: parsed.pnr ?? null,
+    origin_iata: parsed.origin_iata ?? null,
+    destination_iata: parsed.destination_iata ?? null,
+    departure_date: parsed.departure_date ?? null,
+    return_date: parsed.return_date ?? null,
+  };
+
+  if (summary.pnr || summary.origin_iata || summary.destination_iata || summary.departure_date) {
+    console.log("[parse-magic-paste] Delta HTML extracted", summary);
+  }
+
+  if (parsed.pnr) draft.pnr = parsed.pnr;
+  if (parsed.origin_iata) draft.origin_iata = parsed.origin_iata.toUpperCase();
+  if (parsed.destination_iata) draft.destination_iata = parsed.destination_iata.toUpperCase();
+  if (parsed.departure_date) draft.departure_date = parsed.departure_date;
+  if (parsed.return_date) draft.return_date = parsed.return_date;
+
+  if (parsed.flight_numbers?.length) {
+    draft.flight_numbers = parsed.flight_numbers.map(fn => fn.toUpperCase());
+    if (!draft.airline_code) draft.airline_code = "DL";
+  }
+
+  if ((parsed.origin_iata || parsed.destination_iata) && !draft.airline_code) {
+    draft.airline_code = "DL";
+  }
+
+  if (parsed.confidence) {
+    draft.last_confidence = parsed.confidence;
+  }
 }
 
 // ---------- quick regex parse ----------
@@ -250,6 +290,8 @@ serve(async (req) => {
 
     // 1) quick regex pass
     let parsed: Partial<ParsedTrip> = { ...quickRegexParse(text) };
+
+    applyDeltaParsingIfApplicable(text, parsed);
 
     // 2) AI fallback if minimal fields missing
     const missing = validateForPricing(parsed);

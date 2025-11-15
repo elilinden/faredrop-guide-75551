@@ -7,6 +7,12 @@ export type ParsedTrip = {
   brand?: string;
   ticket_number?: string;
   currency?: string;
+  origin_iata?: string;
+  destination_iata?: string;
+  departure_date?: string;
+  return_date?: string | null;
+  flight_numbers?: string[];
+  last_confidence?: 'exact-flight' | 'route-estimate' | 'unknown';
   segments?: {
     carrier?: 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6';
     flight_number?: string;
