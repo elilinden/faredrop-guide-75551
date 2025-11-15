@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Search, MessageCircleQuestion, Sparkles, ShieldCheck, ArrowUpRight } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const metrics = [
   {
@@ -172,8 +173,9 @@ const Faq = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted">
-      <div className="border-b bg-background/80 backdrop-blur">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-background to-muted">
+      <main className="flex-1">
+        <div className="border-b bg-background/80 backdrop-blur">
         <div className="container mx-auto flex flex-col gap-6 px-4 py-12 text-center md:py-16">
           <Badge variant="secondary" className="mx-auto w-fit text-sm">
             Updated for 2025 travel policies
@@ -218,9 +220,9 @@ const Faq = () => {
             </p>
           </div>
         </div>
-      </div>
+        </div>
 
-      <div className="container mx-auto px-4 py-12 md:py-16">
+        <div className="container mx-auto px-4 py-12 md:py-16">
         <Tabs value={activeCategory} onValueChange={setActiveCategory} className="space-y-8">
           <TabsList className="flex w-full flex-wrap justify-start gap-2 overflow-x-auto rounded-full bg-muted/60 p-2">
             <TabsTrigger value="all" className="rounded-full px-4 py-2 text-sm">
@@ -273,6 +275,9 @@ const Faq = () => {
           </CardContent>
         </Card>
       </div>
+      </main>
+
+      <SiteFooter />
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { Plane } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -114,9 +115,10 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-3 text-center">
+    <div className="flex min-h-screen flex-col bg-gradient-to-br from-primary/5 via-background to-accent/5">
+      <main className="flex flex-1 items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-3 text-center">
           <div className="mx-auto w-12 h-12 bg-primary rounded-full flex items-center justify-center">
             <Plane className="w-6 h-6 text-primary-foreground" />
           </div>
@@ -275,7 +277,9 @@ const Auth = () => {
             </TabsContent>
           </Tabs>
         </CardContent>
-      </Card>
+        </Card>
+      </main>
+      <SiteFooter />
     </div>
   );
 };

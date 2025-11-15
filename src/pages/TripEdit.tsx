@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { Plane, ChevronDown, Plus, Trash2, Info } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -287,14 +288,15 @@ const TripEdit = () => {
 
   if (initialLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        Loading...
+      <div className="flex min-h-screen flex-col bg-background">
+        <main className="flex flex-1 items-center justify-center">Loading...</main>
+        <SiteFooter />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
@@ -306,7 +308,7 @@ const TripEdit = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
+      <main className="container mx-auto flex-1 px-4 py-8 max-w-2xl">
         <h1 className="text-3xl font-bold mb-2">Edit Trip</h1>
         <p className="text-sm text-muted-foreground mb-6 flex items-start gap-2">
           <Info className="w-4 h-4 mt-0.5 shrink-0" />
@@ -624,6 +626,7 @@ const TripEdit = () => {
           </div>
         </form>
       </main>
+      <SiteFooter />
     </div>
   );
 };

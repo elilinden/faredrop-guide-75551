@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Plane, TrendingDown, Bell, Shield } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ const Index = () => {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-background to-muted">
       <header className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -34,14 +35,14 @@ const Index = () => {
             <Button variant="ghost" onClick={() => navigate("/auth")}>
               Sign In
             </Button>
-            <Button onClick={() => navigate("/auth")}> 
+            <Button onClick={() => navigate("/auth")}>
               Get Started
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-16">
+      <main className="container mx-auto flex-1 px-4 py-16">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <div className="space-y-4">
             <h1 className="text-5xl font-bold tracking-tight">
@@ -97,35 +98,7 @@ const Index = () => {
           </div>
         </div>
       </main>
-
-      <footer className="container mx-auto mt-16 border-t px-4 py-8">
-        <div className="flex flex-col items-center gap-4 text-center text-sm text-muted-foreground md:flex-row md:justify-between md:text-left">
-          <p>© 2025 FareDrop Guide. Track smarter, save more.</p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate("/faq")}>
-              FAQs
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/blog")}>
-              Blog
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/about")}>
-              About Us
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/contact")}>
-              Contact Us
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/terms")}>
-              Terms of Service
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/privacy")}>
-              Privacy Policy
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate("/cookies")}>
-              Cookie Settings
-            </Button>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 };
