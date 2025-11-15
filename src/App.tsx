@@ -13,6 +13,10 @@ import Settings from "./pages/Settings";
 import Lookup from "./pages/Lookup";
 import NotFound from "./pages/NotFound";
 import Faq from "./pages/Faq";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Cookies from "./pages/Cookies";
+import Blog from "./pages/Blog";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +36,10 @@ const App = () => (
           <Route path="/settings" element={<Settings />} />
           <Route path="/lookup" element={<Lookup />} />
           <Route path="/faq" element={<Faq />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/cookies" element={<Cookies />} />
+          <Route path="/blog" element={<Blog />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
