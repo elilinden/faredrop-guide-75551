@@ -1,5 +1,4 @@
 // Deno Edge Function: contact-message
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.4";
 
 const cors = {
