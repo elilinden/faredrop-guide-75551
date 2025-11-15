@@ -55,10 +55,6 @@ interface TripData {
   eticketNumber: string | null;
   isRefundable: boolean;
   departureDate: string | null;
-  route_display?: string;
-  travel_dates_display?: string;
-  origin_iata?: string;
-  destination_iata?: string;
 }
 
 // Helper function to extract data using regex patterns
@@ -145,8 +141,13 @@ function parseDurationToMinutes(str: string | null): number | null {
   return h * 60 + m;
 }
 
-// List of valid IATA airport codes (top 500 most common airports)
-const VALID_IATA_CODES = new Set([
+// Track uncommon IATA codes we've already logged so we don't spam the console.
+const loggedUncommonIATACodes = new Set<string>();
+
+// Common airport codes we historically expected. We still accept anything that
+// looks like a 3-letter airport, but use this list to avoid logging spam for
+// the majority of requests.
+const COMMON_IATA_CODES = new Set([
   "ATL", "DFW", "DEN", "ORD", "LAX", "JFK", "LAS", "MCO", "MIA", "CLT",
   "SEA", "PHX", "EWR", "SFO", "IAH", "BOS", "FLL", "MSP", "LGA", "DTW",
   "PHL", "SLC", "DCA", "SAN", "BWI", "TPA", "AUS", "MDW", "BNA", "IAD",
@@ -157,19 +158,35 @@ const VALID_IATA_CODES = new Set([
   "LIT", "GSO", "ICT", "CHS", "SYR", "GSP", "LEX", "FAT", "COS", "PWM",
   "MAF", "LBB", "GRR", "SBA", "MSN", "PNS", "CAK", "SAV", "FWA", "DAY",
   "BGR", "MYR", "LAN", "TYS", "AGS", "CRW", "FAR", "BIL", "CAE", "TRI",
-  // International airports
   "YYZ", "YVR", "YUL", "YYC", "MEX", "CUN", "GDL", "MTY", "PVR", "SJD",
   "LHR", "CDG", "AMS", "FRA", "MAD", "FCO", "BCN", "MUC", "IST", "DUB",
   "ZRH", "VIE", "BRU", "CPH", "ARN", "OSL", "HEL", "WAW", "PRG", "BUD",
   "NRT", "ICN", "HKG", "SIN", "BKK", "KUL", "DEL", "BOM", "DXB", "DOH",
   "SYD", "MEL", "BNE", "AKL", "PER", "GRU", "EZE", "SCL", "BOG", "LIM",
-  "PTY", "SJO", "SAL", "GUA"
+  "PTY", "SJO", "SAL", "GUA",
 ]);
 
-// Helper to validate if a string is a valid 3-letter IATA code
+// Helper to validate if a string looks like a valid 3-letter IATA code.
+// We used to keep a fixed allow-list of the "top" airports, but that broke
+// for newer/less-common fields like TQO (Tulum) that still return 3-letter
+// codes in Delta's markup. Instead of hard-blocking those, accept any
+// alphabetical 3-letter sequence and just log when we encounter something
+// outside the historical list so we can review later.
 function isValidIATA(code: string | null): boolean {
   if (!code || code.length !== 3) return false;
-  return VALID_IATA_CODES.has(code.toUpperCase());
+
+  const normalized = code.toUpperCase();
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    return false;
+  }
+
+  // Allow all alphabetical triples, but log uncommon ones once for debugging.
+  if (!COMMON_IATA_CODES.has(normalized) && !loggedUncommonIATACodes.has(normalized)) {
+    console.log(`[lookup] Accepting uncommon IATA code: ${normalized}`);
+    loggedUncommonIATACodes.add(normalized);
+  }
+
+  return true;
 }
 
 // Helper to validate if a string is a valid flight number
@@ -178,19 +195,81 @@ function isValidFlightNumber(num: string | null): boolean {
 }
 
 // Helper to parse flight segments from HTML with strict validation
-function extractTime(html: string, keyword: "Depart" | "Arrive"): string | null {
+function extractOrderedTimes(html: string): {
+  depart: string | null;
+  arrive: string | null;
+  count: number;
+} {
+  const matches = [...html.matchAll(/td-flight-point-time[^>]*>\s*([^<]+)/gi)];
+  if (matches.length >= 2) {
+    const depart = matches[0][1]?.trim() ?? null;
+    const arrive = matches[matches.length - 1][1]?.trim() ?? null;
+    return { depart, arrive, count: matches.length };
+  }
+
+  const departFallback = extractTimeWithKeyword(html, "Depart");
+  const arriveFallback = extractTimeWithKeyword(html, "Arrive");
+  return {
+    depart: departFallback,
+    arrive: arriveFallback,
+    count: matches.length,
+  };
+}
+
+function extractOrderedAirports(html: string): {
+  depart: string | null;
+  arrive: string | null;
+  count: number;
+} {
+  const matches = [...html.matchAll(/td-train-point-city[^>]*>[\s\S]*?\(([A-Z]{3})\)/gi)];
+  if (matches.length >= 2) {
+    const depart = matches[0][1]?.trim().toUpperCase() ?? null;
+    const arrive = matches[matches.length - 1][1]?.trim().toUpperCase() ?? null;
+    return { depart, arrive, count: matches.length };
+  }
+
+  const departFallback = extractAirportWithKeyword(html, "Depart");
+  const arriveFallback = extractAirportWithKeyword(html, "Arrive");
+  return {
+    depart: departFallback,
+    arrive: arriveFallback,
+    count: matches.length,
+  };
+}
+
+function extractOrderedDates(html: string): {
+  depart: Date | null;
+  arrive: Date | null;
+  count: number;
+} {
+  const matches = [...html.matchAll(/td-flight-point-date[^>]*>\s*([^<]+)/gi)];
+  if (matches.length > 0) {
+    const cleaned = matches.map((m) => m[1]?.replace(/\s+/g, " ").trim()).filter(Boolean) as string[];
+    const departDate = cleaned.length > 0 ? extractBaseDate(cleaned[0]) : null;
+    const arriveDate = cleaned.length > 1 ? extractBaseDate(cleaned[cleaned.length - 1]) : null;
+    return { depart: departDate, arrive: arriveDate ?? departDate, count: matches.length };
+  }
+
+  return {
+    depart: extractSegmentDateWithKeyword(html, "Depart"),
+    arrive: extractSegmentDateWithKeyword(html, "Arrive"),
+    count: matches.length,
+  };
+}
+
+function extractTimeWithKeyword(html: string, keyword: "Depart" | "Arrive"): string | null {
   const regex = new RegExp(`${keyword}[\\s\\S]{0,400}?td-flight-point-time[^>]*>\\s*([0-9]{1,2}:[0-9]{2}\\s*(?:AM|PM))`, "i");
   const match = html.match(regex);
   return match ? match[1].trim() : null;
 }
 
-function extractAirport(html: string, keyword: "Depart" | "Arrive"): string | null {
+function extractAirportWithKeyword(html: string, keyword: "Depart" | "Arrive"): string | null {
   const regex = new RegExp(`${keyword}[\\s\\S]{0,600}?td-train-point-city[^>]*>\\s*[^<]*\\(([A-Z]{3})\\)`, "i");
   const match = html.match(regex);
   return match ? match[1].trim().toUpperCase() : null;
 }
 
-function extractSegmentDate(html: string, keyword: "Depart" | "Arrive"): Date | null {
+function extractSegmentDateWithKeyword(html: string, keyword: "Depart" | "Arrive"): Date | null {
   const regex = new RegExp(`${keyword}[\\s\\S]{0,400}?td-flight-point-date[^>]*>\\s*([^<]+)`, "i");
   const match = html.match(regex);
   if (!match) return null;
@@ -240,101 +319,6 @@ function adjustArrivalIfNextDay(departIso: string | null, arriveIso: string | nu
   return arriveIso;
 }
 
-// Helper to extract airport code from container text
-function extractAirportCode($el: cheerio.Cheerio<cheerio.Element>): string | undefined {
-  // Look for patterns like "(LGA)" or "(TQO)" in the text
-  const locationText = $el.find(".td-fc-dept-arr-airport, .td-flight-point-city").text().trim() || $el.text().trim();
-  const match = locationText.match(/\(([A-Z]{3})\)/);
-  return match?.[1];
-}
-
-// Parse Delta trip metadata from HTML using Cheerio
-function parseDeltaTripMetadata(html: string): Partial<TripData> {
-  const $ = cheerio.load(html);
-  const trip: Partial<TripData> = {};
-
-  // Find the analytics script
-  const smetricsSrc = $('script[src*="smetrics.delta.com/b/ss/deltacom2"]').attr("src");
-  
-  if (smetricsSrc) {
-    const query = smetricsSrc.split("?")[1] ?? "";
-    const params = new URLSearchParams(query);
-
-    const tripType = params.get("v3") || undefined;
-    const departDateRaw = params.get("v10");
-    const returnDateRaw = params.get("v11");
-
-    trip.tripType = tripType === "oneway" ? "one-way" : tripType === "roundtrip" ? "round-trip" : null;
-
-    console.log("[lookup] Delta analytics data:", { tripType, departDateRaw, returnDateRaw });
-
-    // Parse departure/arrival time blocks from DOM
-    let departTimeText: string | undefined;
-    let departDateText: string | undefined;
-    let arriveTimeText: string | undefined;
-    let arriveDateText: string | undefined;
-
-    $(".td-departure-arrival-container").each((_, el) => {
-      const $el = $(el);
-      const label = $el.find(".td-flight-point-text").first().text().trim().toLowerCase();
-      const time = $el.find(".td-flight-point-time").first().text().trim();
-      const date = $el.find(".td-flight-point-date").first().text().trim();
-      const airportCode = extractAirportCode($el);
-
-      if (label.startsWith("depart")) {
-        // First DEPART block → trip origin
-        if (!trip.origin_iata && airportCode) {
-          trip.origin_iata = airportCode;
-        }
-        if (!departTimeText) {
-          departTimeText = time;
-          departDateText = date;
-        }
-      }
-      if (label.startsWith("arrive")) {
-        // Last ARRIVE block → final destination
-        if (airportCode) {
-          trip.destination_iata = airportCode;
-        }
-        arriveTimeText = time;
-        arriveDateText = date;
-      }
-    });
-
-    console.log("[lookup] Delta time blocks:", { departTimeText, departDateText, arriveTimeText, arriveDateText });
-    console.log("[lookup] Delta extracted airport codes:", { origin: trip.origin_iata, destination: trip.destination_iata });
-
-    // Build route display from extracted airport codes
-    if (trip.origin_iata && trip.destination_iata) {
-      trip.route_display = `${trip.origin_iata} → ${trip.destination_iata}`;
-      trip.fullRoute = `${trip.origin_iata} → ${trip.destination_iata}`;
-    }
-
-    // Build travel dates display
-    if (departDateText && departTimeText) {
-      const start = `${departDateText} ${departTimeText}`;
-      const end = (arriveDateText && arriveTimeText)
-        ? `${arriveDateText} ${arriveTimeText}`
-        : undefined;
-      trip.travel_dates_display = end ? `${start} – ${end}` : start;
-    }
-
-    // Parse departure date for trip record
-    if (departDateRaw) {
-      try {
-        const [mm, dd, yyyy] = departDateRaw.split("/");
-        trip.departureDate = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-      } catch (e) {
-        console.log("[lookup] Failed to parse departure date:", departDateRaw, e);
-      }
-    }
-  } else {
-    console.log("[lookup] No Delta analytics script found in HTML");
-  }
-
-  return trip;
-}
-
 function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightSegment[] {
   const segments: ParsedFlightSegment[] = [];
   const structuredMatches = [...html.matchAll(/<idp-flight-segment-info[^>]*>([\s\S]*?)<\/idp-flight-segment-info>/gi)];
@@ -346,10 +330,14 @@ function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightS
   structuredMatches.forEach((match, index) => {
     const segmentHtml = match[1];
     const flightNum = extractFlightNumber(segmentHtml);
-    const depAirport = extractAirport(segmentHtml, "Depart");
-    const arrAirport = extractAirport(segmentHtml, "Arrive");
-    const depTime = extractTime(segmentHtml, "Depart");
-    const arrTime = extractTime(segmentHtml, "Arrive");
+    const airportData = extractOrderedAirports(segmentHtml);
+    const timeData = extractOrderedTimes(segmentHtml);
+    const dateData = extractOrderedDates(segmentHtml);
+
+    const depAirport = airportData.depart;
+    const arrAirport = airportData.arrive;
+    const depTime = timeData.depart;
+    const arrTime = timeData.arrive;
 
     console.log(`[lookup] Structured segment ${index}`, {
       flightNum,
@@ -357,6 +345,9 @@ function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightS
       arrAirport,
       depTime,
       arrTime,
+      airportMatches: airportData.count,
+      timeMatches: timeData.count,
+      dateMatches: dateData.count,
     });
 
     if (!flightNum || !isValidFlightNumber(flightNum)) {
@@ -374,10 +365,21 @@ function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightS
       return;
     }
 
-    const segmentBaseDate = baseDate ?? extractSegmentDate(segmentHtml, "Depart") ?? extractSegmentDate(segmentHtml, "Arrive");
+    const segmentBaseDate =
+      baseDate ??
+      dateData.depart ??
+      dateData.arrive ??
+      extractSegmentDateWithKeyword(segmentHtml, "Depart") ??
+      extractSegmentDateWithKeyword(segmentHtml, "Arrive");
     const departIso = segmentBaseDate ? combineDateAndTime(segmentBaseDate, depTime) : null;
     let arriveIso = segmentBaseDate ? combineDateAndTime(segmentBaseDate, arrTime) : null;
     arriveIso = adjustArrivalIfNextDay(departIso, arriveIso);
+
+    console.log(`[lookup] Structured segment ${index} ISO`, {
+      segmentBaseDate: segmentBaseDate?.toISOString() ?? null,
+      departIso,
+      arriveIso,
+    });
 
     segments.push({
       segmentIndex: segments.length,
@@ -408,7 +410,7 @@ function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightS
   const analyticsFlightMatch = html.match(/[&?]v91=([A-Z]{2}\d{2,4})/);
 
   const analyticsDate = analyticsDateMatch ? parseAnalyticsDate(analyticsDateMatch[1]) : null;
-  const fallbackSegmentDate = extractSegmentDate(html, "Depart");
+  const fallbackSegmentDate = extractSegmentDateWithKeyword(html, "Depart");
   const effectiveBaseDate = baseDate ?? analyticsDate ?? fallbackSegmentDate;
 
   if (analyticsOriginMatch && analyticsDestMatch) {
@@ -421,10 +423,15 @@ function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightS
       analyticsDate: analyticsDate?.toISOString() ?? null,
     });
 
-    const depTime = extractTime(html, "Depart");
-    const arrTime = extractTime(html, "Arrive");
+    const analyticsTimes = extractOrderedTimes(html);
+    const depTime = analyticsTimes.depart;
+    const arrTime = analyticsTimes.arrive;
 
-    console.log("[lookup] Analytics-derived times", { depTime, arrTime });
+    console.log("[lookup] Analytics-derived times", {
+      depTime,
+      arrTime,
+      timeMatches: analyticsTimes.count,
+    });
 
     if (flightNum && depTime && arrTime && isValidFlightNumber(flightNum) && isValidIATA(origin) && isValidIATA(destination)) {
       const departIso = effectiveBaseDate ? combineDateAndTime(effectiveBaseDate, depTime) : null;
