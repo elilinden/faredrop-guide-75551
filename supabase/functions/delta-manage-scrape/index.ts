@@ -230,7 +230,7 @@ function adjustArrivalIfNextDay(departIso: string | null, arriveIso: string | nu
 
 function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightSegment[] {
   const segments: ParsedFlightSegment[] = [];
-  const structuredMatches = [...html.matchAll(/<idp-flight-segment-info[^>]*>([\s\S]*?)<\\/idp-flight-segment-info>/gi)];
+  const structuredMatches = [...html.matchAll(/<idp-flight-segment-info[^>]*>([\s\S]*?)<\/idp-flight-segment-info>/gi)];
 
   structuredMatches.forEach((match) => {
     const segmentHtml = match[1];

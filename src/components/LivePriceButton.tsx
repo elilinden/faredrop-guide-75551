@@ -24,17 +24,7 @@ export function LivePriceButton({ tripId, onUpdate }: LivePriceButtonProps) {
 
       if (error || !data) {
         setLast("Error");
-        const { data: auth } = await supabase.auth.getUser();
-        const userId = auth.user?.id ?? null;
-        if (userId) {
-          await supabase.from("client_logs").insert({
-            user_id: userId,
-            trace_id: traceId,
-            level: "error",
-            message: "invoke check-delta-fare failed",
-            context: { error: error?.message },
-          });
-        }
+        console.error("check-delta-fare failed:", error);
         return;
       }
 
