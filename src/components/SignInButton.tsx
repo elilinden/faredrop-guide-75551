@@ -17,7 +17,7 @@ async function preflightGoogle(): Promise<number> {
   }
 
   const authorizeUrl = `${baseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(
-    window.location.origin,
+    `${window.location.origin}/auth/callback`,
   )}`;
 
   try {
@@ -53,7 +53,7 @@ export const SignInButton = React.forwardRef<HTMLButtonElement, SignInButtonProp
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/#/auth`,
+          redirectTo: `${window.location.origin}/auth/callback`,
           queryParams: { prompt: "select_account" },
         },
       });

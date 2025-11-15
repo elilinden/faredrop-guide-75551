@@ -21,6 +21,7 @@ import Blog from "./pages/Blog";
 import Contact from "./pages/Contact";
 import About from "./pages/About";
 import AuthLanding from "./pages/AuthLanding";
+import AuthCallback from "./pages/AuthCallback";
 import AuthDebug from "./pages/AuthDebug";
 import { useAuthListener } from "@/hooks/useAuthListener";
 
@@ -57,6 +58,7 @@ const App = () => {
             <Route path="/blog" element={<Blog />} />
             <Route path="/contact" element={<Contact />} />
             <Route path="/about" element={<About />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth-debug" element={<AuthDebug />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
