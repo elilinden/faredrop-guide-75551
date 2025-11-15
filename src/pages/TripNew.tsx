@@ -352,6 +352,46 @@ const TripNew = () => {
           if (segmentsError) throw segmentsError;
         }
       }
+
+      if (tripData.airline === "DL") {
+        const loadingToast = toast({
+          title: "Fetching flight details…",
+          description: "Hang tight while we sync with Delta.",
+        });
+        try {
+          const { data: scrapeData, error: scrapeError } = await supabase.functions.invoke("delta-manage-scrape", {
+            body: { tripId: tripData.id },
+          });
+
+          loadingToast.dismiss();
+
+          if (scrapeError) {
+            throw scrapeError;
+          }
+          if (scrapeData && "error" in scrapeData) {
+            throw new Error(typeof scrapeData.error === "string" ? scrapeData.error : "Delta scrape failed");
+          }
+
+          if (scrapeData && scrapeData.skipped) {
+            toast({
+              title: "Delta sync skipped",
+              description: scrapeData.reason ?? "This trip could not be synced automatically.",
+            });
+          } else {
+            toast({
+              title: "Flight details synced",
+              description: "We pulled your route and dates from Delta.",
+            });
+          }
+        } catch (scrapeError: any) {
+          loadingToast.dismiss();
+          toast({
+            variant: "destructive",
+            title: "Couldn't fetch Delta data",
+            description: scrapeError?.message ?? "Please try again in a few minutes.",
+          });
+        }
+      }
       await logAudit("create", tripData.id, {
         airline: tripData.airline,
         pnr: tripData.confirmation_code
