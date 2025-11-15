@@ -211,6 +211,50 @@ export type Database = {
           },
         ]
       }
+      scrape_logs: {
+        Row: {
+          created_at: string
+          data_snippet: string | null
+          id: string
+          message: string | null
+          ms: number | null
+          ok: boolean
+          stage: string
+          trace_id: string
+          trip_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_snippet?: string | null
+          id?: string
+          message?: string | null
+          ms?: number | null
+          ok?: boolean
+          stage: string
+          trace_id: string
+          trip_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_snippet?: string | null
+          id?: string
+          message?: string | null
+          ms?: number | null
+          ok?: boolean
+          stage?: string
+          trace_id?: string
+          trip_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrape_logs_trip_id_fkey"
+            columns: ["trip_id"]
+            isOneToOne: false
+            referencedRelation: "trips"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       segments: {
         Row: {
           aircraft: string | null
