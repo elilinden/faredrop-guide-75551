@@ -14,7 +14,9 @@ export default function AuthDebug() {
       let authPreflight = 0;
       if (url) {
         const ping = await fetch(
-          `${url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`,
+          `${url}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(
+            `${window.location.origin}/auth/callback`,
+          )}`,
           { redirect: "manual" },
         );
         authPreflight = ping.status;
