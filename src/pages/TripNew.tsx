@@ -375,14 +375,14 @@ const TripNew = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <div className="container mx-auto flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
             <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
               <Plane className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
           </Link>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild className="w-full sm:w-auto">
             <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
               Dashboard
             </a>
@@ -479,18 +479,18 @@ const TripNew = () => {
           </Card>
 
           {/* Fallback UI when no segments */}
-          {segments.length === 0 && <Card className="p-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
-              <div className="flex gap-3">
+          {segments.length === 0 && <Card className="border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-950/20">
+              <div className="flex flex-col gap-4 sm:flex-row">
                 <Info className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div className="space-y-3 flex-1">
+                <div className="flex-1 space-y-3">
                   <p className="text-sm text-amber-800 dark:text-amber-200">
                     We can't fetch your itinerary automatically from PNR. To enable price monitoring:
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setActiveTab("import")} className="h-8">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setActiveTab("import")} className="h-10 sm:h-8">
                       Paste Confirmation Email
                     </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => addSegment()} className="h-8">
+                    <Button type="button" variant="outline" size="sm" onClick={() => addSegment()} className="h-10 sm:h-8">
                       Enter Flight Details Manually
                     </Button>
                     {selectedAirline && manageTripLinks[selectedAirline as keyof typeof manageTripLinks] && <Button type="button" variant="ghost" size="sm" asChild className="h-8">
@@ -515,14 +515,14 @@ const TripNew = () => {
               <CardContent className="space-y-4">
                 <div className="space-y-4">
                   {segments.map((seg, idx) => <Card key={idx} className="border-2">
-                    <CardContent className="pt-4 space-y-3">
-                      <div className="flex items-center justify-between mb-2">
+                    <CardContent className="space-y-3 pt-4">
+                      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <span className="text-sm font-medium">Segment {idx + 1}</span>
                         {segments.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => removeSegment(idx)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>}
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
                          <div>
                           <Label className="text-xs">Carrier</Label>
                           <Input value={seg.carrier || ""} onChange={e => updateSegment(idx, "carrier", e.target.value.toUpperCase())} placeholder="DL" maxLength={2} className="uppercase" />
@@ -582,11 +582,11 @@ const TripNew = () => {
             
           </Collapsible>
 
-          <div className="flex gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate("/dashboard")} className="flex-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
+            <Button type="button" variant="outline" onClick={() => navigate("/dashboard")} className="w-full flex-1">
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="flex-1">
+            <Button type="submit" disabled={loading} className="w-full flex-1">
               {loading ? "Saving..." : "Save Trip"}
             </Button>
           </div>

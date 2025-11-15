@@ -58,11 +58,11 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
     : "Date TBD";
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
+    <Card className="transition-shadow hover:shadow-md">
+      <CardContent className="space-y-4 p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
               <AirlineBadge airline={trip.airline} />
               {trip.monitoring_enabled !== false && (
                 <Badge variant="secondary" className="text-xs gap-1">
@@ -80,15 +80,15 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
                 {trip.confirmation_code}
               </span>
             </div>
-            <h3 className="text-lg font-semibold mb-1">
+            <h3 className="mb-1 text-lg font-semibold">
               {trip.airline} · {trip.confirmation_code}
             </h3>
             <p className="text-sm text-muted-foreground">{route}</p>
           </div>
-          {trip.brand && <EligibilityPill brand={trip.brand} />}
+          {trip.brand && <div className="sm:shrink-0"><EligibilityPill brand={trip.brand} /></div>}
         </div>
 
-        <div className="flex flex-wrap gap-4 mb-4 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:flex-wrap">
           <div className="flex items-center gap-1.5">
             <Calendar className="w-4 h-4" />
             <span>{dateDisplay}</span>
@@ -100,14 +100,14 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
         </div>
 
         {trip.last_checked_at && (
-          <div className="mb-3 p-2 bg-muted/50 rounded-md text-xs space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="space-y-2 rounded-md bg-muted/50 p-3 text-xs">
+            <div className="flex flex-col gap-1 text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
               <Clock className="w-3 h-3" />
               <span>Checked {formatDistanceToNow(new Date(trip.last_checked_at), { addSuffix: true })}</span>
             </div>
             {trip.last_public_price && (
               <>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <span className="text-muted-foreground">Last price:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">${trip.last_public_price.toFixed(2)}</span>
@@ -120,7 +120,7 @@ export const TripCard = ({ trip, segments }: TripCardProps) => {
                   </div>
                 </div>
                 {priceChecks.length > 0 && (
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex flex-col gap-1 pt-1 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-muted-foreground">Price trend:</span>
                     <PriceSparkline priceChecks={priceChecks} paidTotal={trip.paid_total} />
                   </div>

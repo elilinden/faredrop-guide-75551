@@ -104,14 +104,14 @@ const Dashboard = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
-        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+        <div className="container mx-auto flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
               <Plane className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold">FareDrop Guide</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
             <Button variant="outline" asChild>
               <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
                 Dashboard
@@ -143,9 +143,9 @@ const Dashboard = () => {
           />
         )}
 
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-2xl font-bold">My Flights</h2>
-          <Button variant="outline" asChild>
+          <Button variant="outline" asChild className="w-full sm:w-auto">
             <Link to="/trips/new">Add Trip</Link>
           </Button>
         </div>
@@ -167,7 +167,7 @@ const Dashboard = () => {
                     {airline === "UA" && "United Airlines"}
                     {airline === "AS" && "Alaska Airlines"}
                   </h2>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {airlineTrips.map(trip => (
                       <TripCard key={trip.id} trip={trip} segments={segmentsMap[trip.id] || []} />
                     ))}
