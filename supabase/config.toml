@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.parse-magic-paste]
 verify_jwt = true
+
+[functions.contact-message]
+verify_jwt = false
