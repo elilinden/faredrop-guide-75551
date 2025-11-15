@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { parseDeltaMyTripsHTML } from "../../../src/lib/parsers/airlines/delta.ts";
 
 type Cabin = "ECONOMY" | "PREMIUM_ECONOMY" | "BUSINESS" | "FIRST";
 
@@ -20,8 +19,6 @@ type ParsedTrip = {
   cabin?: Cabin | null;
   last_confidence?: "exact-flight" | "route-estimate" | "unknown";
 };
-
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -130,43 +127,7 @@ function validateForPricing(trip: Partial<ParsedTrip>) {
   return errs;
 }
 
-function applyDeltaParsingIfApplicable(rawHtml: string, draft: Partial<ParsedTrip>) {
-  const looksLikeHtml = /<[a-z][^>]*>/i.test(rawHtml);
-  const mentionsDelta = /delta/i.test(rawHtml);
-  if (!looksLikeHtml || !mentionsDelta) return;
-
-  const parsed = parseDeltaMyTripsHTML(rawHtml);
-  const summary = {
-    pnr: parsed.pnr ?? null,
-    origin_iata: parsed.origin_iata ?? null,
-    destination_iata: parsed.destination_iata ?? null,
-    departure_date: parsed.departure_date ?? null,
-    return_date: parsed.return_date ?? null,
-  };
-
-  if (summary.pnr || summary.origin_iata || summary.destination_iata || summary.departure_date) {
-    console.log("[parse-magic-paste] Delta HTML extracted", summary);
-  }
-
-  if (parsed.pnr) draft.pnr = parsed.pnr;
-  if (parsed.origin_iata) draft.origin_iata = parsed.origin_iata.toUpperCase();
-  if (parsed.destination_iata) draft.destination_iata = parsed.destination_iata.toUpperCase();
-  if (parsed.departure_date) draft.departure_date = parsed.departure_date;
-  if (parsed.return_date) draft.return_date = parsed.return_date;
-
-  if (parsed.flight_numbers?.length) {
-    draft.flight_numbers = parsed.flight_numbers.map(fn => fn.toUpperCase());
-    if (!draft.airline_code) draft.airline_code = "DL";
-  }
-
-  if ((parsed.origin_iata || parsed.destination_iata) && !draft.airline_code) {
-    draft.airline_code = "DL";
-  }
-
-  if (parsed.confidence) {
-    draft.last_confidence = parsed.confidence;
-  }
-}
+// Delta parsing removed - handled in lookup function
 
 // ---------- quick regex parse ----------
 function quickRegexParse(text: string): Partial<ParsedTrip> {
@@ -197,70 +158,7 @@ function quickRegexParse(text: string): Partial<ParsedTrip> {
   return out;
 }
 
-// ---------- AI fallback ----------
-async function aiParse(text: string): Promise<Partial<ParsedTrip>> {
-  if (!OPENAI_API_KEY) return {};
-  
-  const schema = {
-    type: "object",
-    properties: {
-      pnr: { type: "string", pattern: "^[A-Z0-9]{6}$" },
-      airline_code: { type: "string", pattern: "^[A-Z0-9]{2}$" },
-      passenger_names: { type: "array", items: { type: "string" } },
-      ticket_amount: { type: "number" },
-      currency: { type: "string" },
-      origin_iata: { type: "string", pattern: "^[A-Z]{3}$" },
-      destination_iata: { type: "string", pattern: "^[A-Z]{3}$" },
-      departure_date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-      return_date: { type: "string", nullable: true, pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
-      flight_numbers: { type: "array", items: { type: "string" } },
-      adults: { type: "number", nullable: true },
-      cabin: { type: "string", nullable: true }
-    },
-    required: ["origin_iata", "destination_iata", "departure_date"],
-    additionalProperties: false
-  };
-
-  const body = {
-    model: "gpt-4o-mini",
-    response_format: { 
-      type: "json_schema", 
-      json_schema: { name: "Trip", schema, strict: true } 
-    },
-    messages: [
-      { 
-        role: "system", 
-        content: "Extract a flight itinerary from the user's pasted confirmation. Output ONLY JSON conforming to the provided schema. Use IATA airport codes and ISO dates (YYYY-MM-DD). If unknown, omit the field." 
-      },
-      { role: "user", content: text }
-    ]
-  };
-
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { 
-        Authorization: `Bearer ${OPENAI_API_KEY}`, 
-        "Content-Type": "application/json" 
-      },
-      body: JSON.stringify(body)
-    });
-    
-    if (!res.ok) {
-      console.error("OpenAI API error:", res.status, await res.text());
-      return {};
-    }
-    
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) return {};
-    
-    return JSON.parse(content);
-  } catch (e) {
-    console.error("AI parse error:", e);
-    return {};
-  }
-}
+// AI fallback removed - using regex parsing only
 
 // ---------- handler ----------
 serve(async (req) => {
@@ -290,15 +188,6 @@ serve(async (req) => {
 
     // 1) quick regex pass
     let parsed: Partial<ParsedTrip> = { ...quickRegexParse(text) };
-
-    applyDeltaParsingIfApplicable(text, parsed);
-
-    // 2) AI fallback if minimal fields missing
-    const missing = validateForPricing(parsed);
-    if (missing.length && OPENAI_API_KEY) {
-      const ai = await aiParse(text);
-      parsed = { ...ai, ...parsed }; // prefer regex matches when both exist
-    }
 
     // Final normalize
     if (parsed.origin_iata) parsed.origin_iata = parsed.origin_iata.toUpperCase();
