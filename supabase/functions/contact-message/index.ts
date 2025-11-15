@@ -1,115 +1,132 @@
-import { Resend } from "https://esm.sh/resend@2.0.0";
+// Deno Edge Function: contact-message
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.4";
 
-const corsHeaders = {
+const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const resendApiKey = Deno.env.get("RESEND_API_KEY");
-const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "FareGuardian Contact <alerts@updates.lovable.app>";
-const contactRecipient = Deno.env.get("CONTACT_RECIPIENT") ?? "elilinden@gmail.com";
-const resend = resendApiKey ? new Resend(resendApiKey) : null;
-
-interface ContactPayload {
+type Payload = {
   firstName?: string;
   lastName?: string;
   email?: string;
   message?: string;
-}
+};
 
-function escapeHtml(input: string): string {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function errorResponse(status: number, message: string) {
-  return new Response(JSON.stringify({ error: message }), {
+const json = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), {
     status,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders,
-    },
+    headers: { ...cors, "Content-Type": "application/json" },
   });
-}
 
-function successResponse(data: Record<string, unknown>) {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-      ...corsHeaders,
-    },
-  });
+function escapeHtml(s: string) {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string)
+  );
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  if (req.method !== "POST") return json(405, { ok: false, error: "Method not allowed" });
 
-  if (req.method !== "POST") {
-    return errorResponse(405, "Method not allowed");
-  }
-
-  let payload: ContactPayload;
-
+  let p: Payload;
   try {
-    payload = await req.json();
-  } catch (_error) {
-    return errorResponse(400, "Invalid JSON body");
+    p = await req.json();
+  } catch {
+    return json(400, { ok: false, error: "Invalid JSON" });
   }
 
-  const firstName = payload.firstName?.trim();
-  const lastName = payload.lastName?.trim();
-  const email = payload.email?.trim();
-  const message = payload.message?.trim();
+  const first = (p.firstName ?? "").trim();
+  const last = (p.lastName ?? "").trim();
+  const email = (p.email ?? "").trim();
+  const msg = (p.message ?? "").trim();
 
-  if (!firstName || !lastName || !email || !message) {
-    return errorResponse(400, "Missing required fields");
+  if (!first || !last || !email || !msg) {
+    return json(400, { ok: false, error: "Missing required fields" });
   }
 
-  if (!resend) {
-    console.error("[contact-message] RESEND_API_KEY is not configured");
-    return errorResponse(500, "Email service unavailable");
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!SUPABASE_URL || !SERVICE_ROLE) {
+    return json(500, { ok: false, error: "Server not configured" });
   }
 
-  const escapedMessage = escapeHtml(message).replace(/\n/g, "<br/>");
-  const escapedFirstName = escapeHtml(firstName);
-  const escapedLastName = escapeHtml(lastName);
-  const escapedEmail = escapeHtml(email);
+  const sb = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
-  const html = `
-    <div style="font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #0f172a;">
-      <h2 style="margin-bottom: 16px;">New Contact Request</h2>
-      <p style="margin: 0 0 12px;">You received a new message from the FareGuardian contact form.</p>
-      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-        <p style="margin: 0 0 8px;"><strong>Name:</strong> ${escapedFirstName} ${escapedLastName}</p>
-        <p style="margin: 0 0 8px;"><strong>Email:</strong> <a href="mailto:${escapedEmail}">${escapedEmail}</a></p>
-        <p style="margin: 0;"><strong>Message:</strong></p>
-        <div style="margin-top: 8px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #cbd5f5;">
-          ${escapedMessage}
-        </div>
-      </div>
-    </div>
-  `;
+  // basic request context
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip") ?? "";
+  const ua = req.headers.get("user-agent") ?? "";
 
-  try {
-    await resend.emails.send({
-      from: resendFromEmail,
-      to: [contactRecipient],
-      reply_to: email,
-      subject: `New contact message from ${firstName} ${lastName}`,
-      html,
-      text: `Name: ${firstName} ${lastName}\nEmail: ${email}\n\nMessage:\n${message}`,
-    });
-  } catch (error) {
-    console.error("[contact-message] Failed to send email", error);
-    return errorResponse(500, "Failed to send message");
+  const { data: row, error: insErr } = await sb
+    .from("contact_messages")
+    .insert({
+      first_name: first,
+      last_name: last,
+      email,
+      message: msg,
+      ip,
+      user_agent: ua,
+    })
+    .select("*")
+    .single();
+
+  if (insErr) {
+    console.error("[contact-message] insert error:", insErr);
+    return json(500, { ok: false, error: "Failed to save message" });
   }
 
-  return successResponse({ success: true });
+  // Optional: email via Resend
+  const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+  const CONTACT_TO = Deno.env.get("CONTACT_TO");       // e.g. support@fareguardian.com
+  const CONTACT_FROM = Deno.env.get("CONTACT_FROM");   // e.g. "FareGuardian <no-reply@fareguardian.com>"
+
+  if (RESEND_API_KEY && CONTACT_TO && CONTACT_FROM) {
+    try {
+      const body = {
+        from: CONTACT_FROM,
+        to: [CONTACT_TO],
+        subject: `New contact message from ${first} ${last}`,
+        html: `
+          <h3>New Contact Message</h3>
+          <p><b>Name:</b> ${escapeHtml(first)} ${escapeHtml(last)}</p>
+          <p><b>Email:</b> ${escapeHtml(email)}</p>
+          <p><b>Message:</b><br/>${escapeHtml(msg).replace(/\n/g, "<br/>")}</p>
+          <hr/>
+          <p><small>IP: ${escapeHtml(ip || "n/a")}<br/>UA: ${escapeHtml(ua)}</small></p>
+        `,
+      };
+
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!r.ok) {
+        const t = await r.text();
+        console.warn("[contact-message] Resend failed:", r.status, t);
+        await sb.from("contact_messages")
+          .update({ status: "saved_email_failed", error: t.slice(0, 500) })
+          .eq("id", row.id);
+      } else {
+        await sb.from("contact_messages")
+          .update({ status: "saved_emailed" })
+          .eq("id", row.id);
+      }
+    } catch (e) {
+      console.warn("[contact-message] Email exception:", e);
+      await sb.from("contact_messages")
+        .update({ status: "saved_email_failed", error: String(e).slice(0, 500) })
+        .eq("id", row.id);
+    }
+  } else {
+    await sb.from("contact_messages").update({ status: "saved" }).eq("id", row.id);
+  }
+
+  return json(200, { ok: true, id: row.id });
 });
