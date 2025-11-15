@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,6 +55,10 @@ interface TripData {
   eticketNumber: string | null;
   isRefundable: boolean;
   departureDate: string | null;
+  route_display?: string;
+  travel_dates_display?: string;
+  origin_iata?: string;
+  destination_iata?: string;
 }
 
 // Helper function to extract data using regex patterns
@@ -233,6 +238,84 @@ function adjustArrivalIfNextDay(departIso: string | null, arriveIso: string | nu
   }
 
   return arriveIso;
+}
+
+// Parse Delta trip metadata from HTML using Cheerio
+function parseDeltaTripMetadata(html: string): Partial<TripData> {
+  const $ = cheerio.load(html);
+  const trip: Partial<TripData> = {};
+
+  // Find the analytics script
+  const smetricsSrc = $('script[src*="smetrics.delta.com/b/ss/deltacom2"]').attr("src");
+  
+  if (smetricsSrc) {
+    const query = smetricsSrc.split("?")[1] ?? "";
+    const params = new URLSearchParams(query);
+
+    const tripType = params.get("v3") || undefined;
+    const origin = params.get("v4") || undefined;
+    const destination = params.get("v5") || undefined;
+    const departDateRaw = params.get("v10");
+    const returnDateRaw = params.get("v11");
+
+    trip.tripType = tripType === "oneway" ? "one-way" : tripType === "roundtrip" ? "round-trip" : null;
+    trip.origin_iata = origin;
+    trip.destination_iata = destination;
+
+    console.log("[lookup] Delta analytics data:", { tripType, origin, destination, departDateRaw, returnDateRaw });
+
+    // Parse departure/arrival time blocks from DOM
+    let departTimeText: string | undefined;
+    let departDateText: string | undefined;
+    let arriveTimeText: string | undefined;
+    let arriveDateText: string | undefined;
+
+    $(".td-departure-arrival-container").each((_, el) => {
+      const label = $(el).find(".td-flight-point-text").first().text().trim().toLowerCase();
+      const time = $(el).find(".td-flight-point-time").first().text().trim();
+      const date = $(el).find(".td-flight-point-date").first().text().trim();
+
+      if (label.startsWith("depart") && !departTimeText) {
+        departTimeText = time;
+        departDateText = date;
+      }
+      if (label.startsWith("arrive")) {
+        arriveTimeText = time;
+        arriveDateText = date;
+      }
+    });
+
+    console.log("[lookup] Delta time blocks:", { departTimeText, departDateText, arriveTimeText, arriveDateText });
+
+    // Build route display
+    if (origin && destination) {
+      trip.route_display = `${origin} → ${destination}`;
+      trip.fullRoute = `${origin} → ${destination}`;
+    }
+
+    // Build travel dates display
+    if (departDateText && departTimeText) {
+      const start = `${departDateText} ${departTimeText}`;
+      const end = (arriveDateText && arriveTimeText)
+        ? `${arriveDateText} ${arriveTimeText}`
+        : undefined;
+      trip.travel_dates_display = end ? `${start} – ${end}` : start;
+    }
+
+    // Parse departure date for trip record
+    if (departDateRaw) {
+      try {
+        const [mm, dd, yyyy] = departDateRaw.split("/");
+        trip.departureDate = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+      } catch (e) {
+        console.log("[lookup] Failed to parse departure date:", departDateRaw, e);
+      }
+    }
+  } else {
+    console.log("[lookup] No Delta analytics script found in HTML");
+  }
+
+  return trip;
 }
 
 function parseFlightSegments(html: string, baseDate: Date | null): ParsedFlightSegment[] {
@@ -504,6 +587,14 @@ Deno.serve(async (req) => {
     const html = await response.text();
     console.log("[lookup] Received HTML, length:", html.length);
     
+    // Parse Delta-specific metadata if this is a Delta trip
+    let deltaMetadata: Partial<TripData> = {};
+    if (airline.toLowerCase() === "dl" || airline.toLowerCase() === "delta") {
+      console.log("[lookup] Parsing Delta trip metadata...");
+      deltaMetadata = parseDeltaTripMetadata(html);
+      console.log("[lookup] Delta metadata parsed:", deltaMetadata);
+    }
+    
     // Log multiple sections to find where flight data might be
     console.log("[lookup] HTML start (0-1000):", html.substring(0, 1000));
     console.log("[lookup] HTML middle section (50000-51000):", html.substring(50000, 51000));
@@ -572,17 +663,21 @@ Deno.serve(async (req) => {
     const tripData: TripData = {
       airline: airline.charAt(0).toUpperCase() + airline.slice(1),
       confirmation: confirmationCode,
-      tripType: inferredTripType,
-      destination: null, // Will be set from last segment below
+      tripType: deltaMetadata.tripType ?? inferredTripType,
+      destination: deltaMetadata.destination_iata ?? null,
       ticketExpiration: extractWithRegex(html, [/ticket expires?[:\s]+([\w\s,]+)/i, /expiration[:\s]+([\w\s,]+)/i]),
-      fullRoute: null, // Will be built from segments below
+      fullRoute: deltaMetadata.fullRoute ?? null,
       totalDuration: totalDurationMinutes !== null ? String(totalDurationMinutes) : null,
       passengerName: `${firstName || ""} ${lastName}`.trim(),
       loyaltyStatus: extractWithRegex(html, [/(?:skymiles|medallion)[:\s]+(\w+)/i]),
-      fareClass: null, // Don't extract fare class - not useful
+      fareClass: null,
       eticketNumber: extractWithRegex(html, [/e-?ticket[:\s#]+([\d-]+)/i, /ticket (?:number|#)[:\s]+([\d-]+)/i]),
       isRefundable: html.toLowerCase().includes("refundable") && !html.toLowerCase().includes("non-refundable"),
-      departureDate: null, // Will be set from first segment below
+      departureDate: deltaMetadata.departureDate ?? null,
+      route_display: deltaMetadata.route_display,
+      travel_dates_display: deltaMetadata.travel_dates_display,
+      origin_iata: deltaMetadata.origin_iata,
+      destination_iata: deltaMetadata.destination_iata,
     };
 
     // Build fullRoute from valid segments only
