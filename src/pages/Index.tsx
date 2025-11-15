@@ -267,6 +267,28 @@ const Index = () => {
               <p className="mt-2 text-sm text-slate-600">
                 Curated like Airbnb stays—clear photos, transparent pricing, and the insights you need to act fast.
               </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[{
+                  title: "Dynamic fare baselines",
+                  description: "Know instantly if a drop is meaningful with context around historical lows and competitive rates.",
+                  icon: <Activity className="h-5 w-5" />,
+                },
+                {
+                  title: "Global coverage",
+                  description: "Monitor 900+ airlines and alliances, from major carriers to boutique routes worldwide.",
+                  icon: <Globe className="h-5 w-5" />,
+                }].map((item) => (
+                  <div key={item.title} className="rounded-3xl border border-white/10 bg-white/5 p-6">
+                    <div className="flex items-center gap-3 text-primary">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/20">
+                        {item.icon}
+                      </div>
+                      <h3 className="text-base font-semibold text-white">{item.title}</h3>
+                    </div>
+                    <p className="mt-3 text-sm text-white/70">{item.description}</p>
+                  </div>
+                ))}
+              </div>
             </div>
             <Button
               variant="outline"
