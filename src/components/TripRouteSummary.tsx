@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Calendar, MapPin, Pencil, Check, X } from "lucide-react";
-import { format } from "date-fns";
+import { useState } from "react";
+import { Calendar, MapPin, Pencil, Check, X, DollarSign } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
@@ -8,6 +8,86 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AirportInput } from "@/components/AirportInput";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { LivePriceButton } from "./LivePriceButton";
+
+function deriveRouteFromSegments(segments: any[]) {
+  const validSegs = Array.isArray(segments) ? segments.filter(Boolean) : [];
+  if (validSegs.length === 0) return null;
+  const first = validSegs[0];
+  const last = validSegs[validSegs.length - 1];
+  const origin = first?.origin_iata || first?.origin || first?.from || first?.depart_airport || null;
+  const destination =
+    last?.destination_iata ||
+    last?.destination ||
+    last?.to ||
+    last?.arrive_airport ||
+    null;
+  if (!origin || !destination) return null;
+  return { origin, destination, source: "segments" as const };
+}
+
+function deriveRouteFromTrip(trip: any) {
+  const origin = trip?.origin_iata || trip?.origin || null;
+  const destination = trip?.destination_iata || trip?.destination || null;
+  if (!origin || !destination) return null;
+  return { origin, destination, source: "trip_fields" as const };
+}
+
+function deriveRouteFromDisplay(trip: any) {
+  const rawDisplay = trip?.route_display || trip?.full_route;
+  if (typeof rawDisplay !== "string" || rawDisplay.trim() === "") return null;
+  const parts = rawDisplay.split("→").map((part: string) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  return { origin: parts[0], destination: parts[parts.length - 1], source: "display" as const };
+}
+
+function deriveRoute(trip: any, segments: any[]) {
+  return (
+    deriveRouteFromSegments(segments) ||
+    deriveRouteFromTrip(trip) ||
+    deriveRouteFromDisplay(trip)
+  );
+}
+
+function deriveDates(trip: any, segments: any[]) {
+  const validSegs = Array.isArray(segments) ? segments.filter((segment) => !!segment) : [];
+  if (validSegs.length > 0) {
+    const departDate = new Date(validSegs[0].depart_datetime ?? validSegs[0].departure_datetime);
+    const returnDate =
+      validSegs.length > 1
+        ? new Date(validSegs[validSegs.length - 1].depart_datetime ?? validSegs[validSegs.length - 1].departure_datetime)
+        : null;
+    if (!Number.isNaN(departDate.getTime())) {
+      return {
+        departDate,
+        returnDate: returnDate && !Number.isNaN(returnDate.getTime()) ? returnDate : null,
+        source: "segments" as const,
+      };
+    }
+  }
+
+  if (trip?.depart_date) {
+    const departDate = new Date(trip.depart_date);
+    const returnDate = trip.return_date ? new Date(trip.return_date) : null;
+    if (!Number.isNaN(departDate.getTime())) {
+      return {
+        departDate,
+        returnDate: returnDate && !Number.isNaN(returnDate.getTime()) ? returnDate : null,
+        source: "trip_fields" as const,
+      };
+    }
+  }
+
+  if (trip?.departure_date) {
+    const departDate = new Date(trip.departure_date);
+    if (!Number.isNaN(departDate.getTime())) {
+      return { departDate, returnDate: null, source: "departure_date" as const };
+    }
+  }
+
+  return null;
+}
 
 interface TripRouteSummaryProps {
   trip: any;
@@ -30,74 +110,45 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
   const [editDepartDate, setEditDepartDate] = useState<Date | undefined>();
   const [editReturnDate, setEditReturnDate] = useState<Date | undefined>();
 
-  // Derive route from multiple sources (with priority order)
-  const deriveRoute = () => {
-    // 1. Try route_display from lookup (Delta parsing)
-    if (trip.route_display) {
-      const parts = trip.route_display.split("→").map((p: string) => p.trim());
-      if (parts.length >= 2) {
-        return { origin: parts[0], destination: parts[parts.length - 1], source: "route_display" };
-      }
-    }
+  const route = deriveRoute(trip, segments);
+  const dates = deriveDates(trip, segments);
+  const travelDatesDisplay = typeof trip?.travel_dates_display === "string" ? trip.travel_dates_display : null;
+  const editableDepartDate = dates?.departDate ?? null;
+  const editableReturnDate = dates?.returnDate ?? null;
+  const hasEditableDates = !!editableDepartDate;
 
-    // 2. Try segments
-    const validSegs = segments.filter(s => s.depart_airport && s.arrive_airport);
-    if (validSegs.length > 0) {
-      const origin = validSegs[0].depart_airport;
-      const destination = validSegs[validSegs.length - 1].arrive_airport;
-      return { origin, destination, source: "segments" };
-    }
+  const lastLivePrice = typeof trip.last_live_price === "number"
+    ? trip.last_live_price
+    : typeof trip.last_live_price === "string"
+      ? Number.parseFloat(trip.last_live_price)
+      : null;
+  const lastLiveCurrency = trip.last_live_price_currency || "USD";
+  const lastLiveCheckedAt = trip.last_live_checked_at ? new Date(trip.last_live_checked_at) : null;
+  const validLastLiveCheckedAt = lastLiveCheckedAt && !Number.isNaN(lastLiveCheckedAt.getTime()) ? lastLiveCheckedAt : null;
+  const lastLiveSource = trip.last_live_source || null;
+  const livePriceConfidence = trip.live_price_confidence || null;
+  const isDeltaTrip = trip.airline === "DL";
 
-    // 3. Try full_route
-    if (trip.full_route) {
-      const parts = trip.full_route.split("→").map((p: string) => p.trim());
-      if (parts.length >= 2) {
-        return { origin: parts[0], destination: parts[parts.length - 1], source: "full_route" };
-      }
-    }
+  const formattedLivePrice = lastLivePrice != null && !Number.isNaN(lastLivePrice)
+    ? (() => {
+        try {
+          return new Intl.NumberFormat("en-US", { style: "currency", currency: lastLiveCurrency }).format(lastLivePrice);
+        } catch {
+          return `$${lastLivePrice.toFixed(2)}`;
+        }
+      })()
+    : null;
 
-    // 4. Try origin_iata/destination_iata
-    if (trip.origin_iata && trip.destination_iata) {
-      return { origin: trip.origin_iata, destination: trip.destination_iata, source: "trip_fields" };
-    }
-
-    return null;
+  const confidenceLabels: Record<string, string> = {
+    "exact-flight": "Exact flight match",
+    "route-estimate": "Route estimate",
+    unknown: "Unknown confidence",
   };
 
-  // Derive dates from multiple sources
-  const deriveDates = () => {
-    // 1. Check if we have travel_dates_display - use it for display only
-    if (trip.travel_dates_display) {
-      // Return as-is for display, without parsing
-      return { displayText: trip.travel_dates_display, source: "travel_dates_display" };
-    }
-
-    // 2. Try segments
-    const validSegs = segments.filter(s => s.depart_datetime);
-    if (validSegs.length > 0) {
-      const departDate = new Date(validSegs[0].depart_datetime);
-      const returnDate = validSegs.length > 1 ? new Date(validSegs[validSegs.length - 1].depart_datetime) : null;
-      return { departDate, returnDate, source: "segments" };
-    }
-
-    // 3. Try trip fields
-    if (trip.depart_date) {
-      const departDate = new Date(trip.depart_date);
-      const returnDate = trip.return_date ? new Date(trip.return_date) : null;
-      return { departDate, returnDate, source: "trip_fields" };
-    }
-
-    // 4. Try departure_date field
-    if (trip.departure_date) {
-      const departDate = new Date(trip.departure_date);
-      return { departDate, returnDate: null, source: "departure_date" };
-    }
-
-    return null;
+  const sourceLabels: Record<string, string> = {
+    "delta-manage": "Delta Manage Trip",
+    "delta-shop": "Delta Shop",
   };
-
-  const route = deriveRoute();
-  const dates = deriveDates();
 
   const handleSaveRoute = async () => {
     if (!selectedOriginIATA || !selectedDestIATA) {
@@ -185,6 +236,45 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
 
   return (
     <div className="space-y-3">
+      {/* Live Price Section */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <DollarSign className="w-4 h-4" />
+            <span>Live price</span>
+          </div>
+          {isDeltaTrip ? (
+            <LivePriceButton tripId={trip.id} onUpdate={onUpdate} />
+          ) : (
+            <span className="text-xs text-muted-foreground">Live price available for Delta flights only</span>
+          )}
+        </div>
+        {formattedLivePrice ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary" className="text-xs font-medium">
+              {formattedLivePrice}
+            </Badge>
+            {validLastLiveCheckedAt && (
+              <span>
+                Checked {formatDistanceToNow(validLastLiveCheckedAt, { addSuffix: true })}
+              </span>
+            )}
+            {lastLiveSource && (
+              <Badge variant="outline" className="text-xs font-medium">
+                {sourceLabels[lastLiveSource] || lastLiveSource}
+              </Badge>
+            )}
+            {livePriceConfidence && (
+              <Badge variant="outline" className="text-xs font-medium">
+                {confidenceLabels[livePriceConfidence] || livePriceConfidence}
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No live price yet.</p>
+        )}
+      </div>
+
       {/* Route Section */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -280,13 +370,13 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
             <Calendar className="w-4 h-4" />
             <span>Travel Dates</span>
           </div>
-          {!isEditingDates && dates && !dates.displayText && (
+          {!isEditingDates && hasEditableDates && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
-                setEditDepartDate(dates.departDate);
-                setEditReturnDate(dates.returnDate || undefined);
+                setEditDepartDate(editableDepartDate ?? undefined);
+                setEditReturnDate(editableReturnDate ?? undefined);
                 setIsEditingDates(true);
               }}
             >
@@ -296,19 +386,15 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
         </div>
 
         {!isEditingDates ? (
-          dates ? (
-            dates.displayText ? (
-              // Display the pre-formatted travel dates from Delta
-              <div className="text-sm">{dates.displayText}</div>
-            ) : (
-              // Format the parsed dates
-              <div className="text-sm">
-                {dates.departDate && format(dates.departDate, "MMM d, yyyy")}
-                {dates.returnDate && (
-                  <span> - {format(dates.returnDate, "MMM d, yyyy")}</span>
-                )}
-              </div>
-            )
+          travelDatesDisplay ? (
+            <div className="text-sm">{travelDatesDisplay}</div>
+          ) : dates ? (
+            <div className="text-sm">
+              {dates.departDate && format(dates.departDate, "MMM d, yyyy")}
+              {dates.returnDate && (
+                <span> - {format(dates.returnDate, "MMM d, yyyy")}</span>
+              )}
+            </div>
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">No date data</span>
