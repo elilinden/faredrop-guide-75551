@@ -86,7 +86,7 @@ const TripDetail = () => {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        navigate("/auth");
+        navigate("/sign-in");
         return;
       }
 

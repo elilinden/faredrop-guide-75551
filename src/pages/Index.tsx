@@ -32,10 +32,10 @@ const Index = () => {
             <Button variant="ghost" onClick={() => navigate("/faq")}>
               FAQs
             </Button>
-            <Button variant="ghost" onClick={() => navigate("/auth")}>
+            <Button variant="ghost" onClick={() => navigate("/sign-in")}>
               Sign In
             </Button>
-            <Button onClick={() => navigate("/auth")}>
+            <Button onClick={() => navigate("/sign-in")}>
               Get Started
             </Button>
           </div>
@@ -54,7 +54,7 @@ const Index = () => {
           </div>
 
           <div className="flex flex-wrap justify-center gap-4">
-            <Button size="lg" onClick={() => navigate("/auth")}> 
+            <Button size="lg" onClick={() => navigate("/sign-in")}>
               Start Tracking Flights
             </Button>
             <Button size="lg" variant="outline" onClick={() => navigate("/lookup")}> 

@@ -259,7 +259,7 @@ const TripNew = () => {
           description: "You must be logged in",
           variant: "destructive"
         });
-        navigate("/auth");
+        navigate("/sign-in");
         return;
       }
 
