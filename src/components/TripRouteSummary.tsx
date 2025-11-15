@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Calendar, MapPin, Pencil, Check, X } from "lucide-react";
-import { format } from "date-fns";
+import { Calendar, MapPin, Pencil, Check, X, DollarSign } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
@@ -8,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AirportInput } from "@/components/AirportInput";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { LivePriceButton } from "./LivePriceButton";
 
 interface TripRouteSummaryProps {
   trip: any;
@@ -99,6 +101,38 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
   const route = deriveRoute();
   const dates = deriveDates();
 
+  const lastLivePrice = typeof trip.last_live_price === "number"
+    ? trip.last_live_price
+    : typeof trip.last_live_price === "string"
+      ? Number.parseFloat(trip.last_live_price)
+      : null;
+  const lastLiveCurrency = trip.last_live_price_currency || "USD";
+  const lastLiveCheckedAt = trip.last_live_checked_at ? new Date(trip.last_live_checked_at) : null;
+  const validLastLiveCheckedAt = lastLiveCheckedAt && !Number.isNaN(lastLiveCheckedAt.getTime()) ? lastLiveCheckedAt : null;
+  const lastLiveSource = trip.last_live_source || null;
+  const livePriceConfidence = trip.live_price_confidence || null;
+
+  const formattedLivePrice = lastLivePrice != null && !Number.isNaN(lastLivePrice)
+    ? (() => {
+        try {
+          return new Intl.NumberFormat("en-US", { style: "currency", currency: lastLiveCurrency }).format(lastLivePrice);
+        } catch {
+          return `$${lastLivePrice.toFixed(2)}`;
+        }
+      })()
+    : null;
+
+  const confidenceLabels: Record<string, string> = {
+    "exact-flight": "Exact flight match",
+    "route-estimate": "Route estimate",
+    unknown: "Unknown confidence",
+  };
+
+  const sourceLabels: Record<string, string> = {
+    "delta-manage": "Delta Manage Trip",
+    "delta-shop": "Delta Shop",
+  };
+
   const handleSaveRoute = async () => {
     if (!selectedOriginIATA || !selectedDestIATA) {
       toast({
@@ -185,6 +219,41 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
 
   return (
     <div className="space-y-3">
+      {/* Live Price Section */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <DollarSign className="w-4 h-4" />
+            <span>Live price</span>
+          </div>
+          <LivePriceButton tripId={trip.id} onUpdate={onUpdate} />
+        </div>
+        {formattedLivePrice ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Badge variant="secondary" className="text-xs font-medium">
+              {formattedLivePrice}
+            </Badge>
+            {validLastLiveCheckedAt && (
+              <span>
+                Checked {formatDistanceToNow(validLastLiveCheckedAt, { addSuffix: true })}
+              </span>
+            )}
+            {lastLiveSource && (
+              <Badge variant="outline" className="text-xs font-medium">
+                {sourceLabels[lastLiveSource] || lastLiveSource}
+              </Badge>
+            )}
+            {livePriceConfidence && (
+              <Badge variant="outline" className="text-xs font-medium">
+                {confidenceLabels[livePriceConfidence] || livePriceConfidence}
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">No live price yet.</p>
+        )}
+      </div>
+
       {/* Route Section */}
       <div>
         <div className="flex items-center justify-between mb-2">
