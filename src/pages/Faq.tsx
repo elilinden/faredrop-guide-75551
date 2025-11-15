@@ -181,7 +181,7 @@ const Faq = () => {
           <div className="space-y-4">
             <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Frequently Asked Questions</h1>
             <p className="mx-auto max-w-3xl text-lg text-muted-foreground">
-              Everything you need to know about pAiback—how we monitor your fares, secure credits, and keep your travel plans
+              Everything you need to know about fareguardian—how we monitor your fares, secure credits, and keep your travel plans
               risk-free.
             </p>
           </div>
@@ -261,11 +261,11 @@ const Faq = () => {
           </CardHeader>
           <CardContent className="flex flex-col items-center justify-center gap-4 pb-8">
             <p className="text-sm text-muted-foreground">
-              Email <a href="mailto:support@paiback.app" className="font-medium text-primary">support@paiback.app</a> or
+              Email <a href="mailto:support@fareguardian.com" className="font-medium text-primary">support@fareguardian.com</a> or
               schedule a concierge call directly from your dashboard.
             </p>
             <Button asChild className="rounded-full px-6">
-              <a href="https://www.paiback.app" target="_blank" rel="noopener noreferrer">
+              <a href="https://www.fareguardian.com" target="_blank" rel="noopener noreferrer">
                 Visit Help Center
                 <ArrowUpRight className="ml-2 h-4 w-4" />
               </a>

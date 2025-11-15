@@ -25,20 +25,20 @@ export const faqCategories: FaqCategory[] = [
     description: "Create your account and connect upcoming trips in minutes.",
     entries: [
       {
-        question: "How does pAiback work?",
+        question: "How does fareguardian work?",
         tags: ["automation", "monitoring", "savings"],
         blocks: [
           {
             type: "paragraph",
             content: [
-              "pAiback keeps a constant pulse on your airline reservations so you never overpay after booking.",
+              "fareguardian keeps a constant pulse on your airline reservations so you never overpay after booking.",
             ],
           },
           {
             type: "list",
             content: [
               "Book directly with Alaska, American, Delta, or United using your preferred loyalty account.",
-              "Forward your confirmation email to ticketing@paiback.app from the email used to sign up.",
+              "Forward your confirmation email to ticketing@fareguardian.com from the email used to sign up.",
               "Our AI watches your fare 24/7, checking for every single price change.",
               "When prices drop, we trigger an airline-approved adjustment and secure eCredits on your behalf.",
               "You receive an email summary the moment new savings are captured.",
@@ -65,8 +65,8 @@ export const faqCategories: FaqCategory[] = [
             type: "ordered",
             content: [
               "Book your flight directly with one of the supported airlines.",
-              "Create your pAiback account at https://www.paiback.app using the same email on your reservation.",
-              "Forward the confirmation email to ticketing@paiback.app—no forms, uploads, or spreadsheets required.",
+              "Create your fareguardian account at https://www.fareguardian.com using the same email on your reservation.",
+              "Forward the confirmation email to ticketing@fareguardian.com—no forms, uploads, or spreadsheets required.",
               "Sit back. We'll confirm activation and start monitoring within minutes.",
             ],
           },
@@ -291,7 +291,7 @@ export const faqCategories: FaqCategory[] = [
           {
             type: "paragraph",
             content: [
-              "One pAiback account can monitor every traveler on a shared confirmation number.",
+              "One fareguardian account can monitor every traveler on a shared confirmation number.",
             ],
           },
           {
@@ -312,7 +312,7 @@ export const faqCategories: FaqCategory[] = [
     description: "Only pay when we deliver measurable savings—no surprises.",
     entries: [
       {
-        question: "How much does pAiback cost?",
+        question: "How much does fareguardian cost?",
         tags: ["commission", "fees"],
         blocks: [
           {
@@ -393,7 +393,7 @@ export const faqCategories: FaqCategory[] = [
             content: [
               "Each month you'll receive an itemized summary covering all travelers and trips.",
               "The 20% commission is automatically charged to the card you store in Settings.",
-              "Prefer ACH or split billing? Reach out to finance@paiback.app for custom arrangements.",
+              "Prefer ACH or split billing? Reach out to finance@fareguardian.com for custom arrangements.",
               "Invoices include downloadable PDFs for easy expensing or reimbursement submissions.",
             ],
           },
@@ -407,7 +407,7 @@ export const faqCategories: FaqCategory[] = [
     description: "Keep every elite perk while layering on extra protection.",
     entries: [
       {
-        question: "Will pAiback affect my airline loyalty status?",
+        question: "Will fareguardian affect my airline loyalty status?",
         tags: ["loyalty", "status"],
         blocks: [
           {
@@ -422,7 +422,7 @@ export const faqCategories: FaqCategory[] = [
               "Elite-qualifying dollars and segments continue to accrue normally.",
               "Upgrade priority and complimentary perks stay in place.",
               "Booking direct ensures you still receive bonus promotions from the airline.",
-              "pAiback simply adds automatic price protection on top of your loyalty benefits.",
+              "fareguardian simply adds automatic price protection on top of your loyalty benefits.",
             ],
           },
         ],
@@ -456,7 +456,7 @@ export const faqCategories: FaqCategory[] = [
     description: "Built for zero disruption and full transparency.",
     entries: [
       {
-        question: "Is there any risk to using pAiback?",
+        question: "Is there any risk to using fareguardian?",
         tags: ["risk-free", "safety"],
         blocks: [
           {
@@ -509,7 +509,7 @@ export const faqCategories: FaqCategory[] = [
           {
             type: "list",
             content: [
-              "Visit our TrustPilot page at https://uk.trustpilot.com/review/paiback.app.",
+              "Visit our TrustPilot page at https://uk.trustpilot.com/review/fareguardian.com.",
               "Explore detailed stories of major savings and customer support experiences.",
               "Share your own experience after your first credit posts to help other travelers.",
             ],
@@ -517,7 +517,7 @@ export const faqCategories: FaqCategory[] = [
         ],
       },
       {
-        question: "Can I refer friends to pAiback?",
+        question: "Can I refer friends to fareguardian?",
         tags: ["referrals", "rewards"],
         blocks: [
           {
