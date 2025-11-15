@@ -53,7 +53,12 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signUp({
+      // Validate password length
+      if (password.length < 6) {
+        throw new Error("Password must be at least 6 characters long");
+      }
+
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -66,12 +71,26 @@ const Auth = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Account created!",
-        description: "You can now sign in with your credentials.",
-      });
+      // Check if email confirmation is required
+      if (data?.user && !data.session) {
+        toast({
+          title: "Check your email",
+          description: "We sent you a confirmation link. Please check your email to activate your account.",
+        });
+      } else {
+        toast({
+          title: "Account created!",
+          description: "You can now sign in with your credentials.",
+        });
+      }
+      
+      // Clear form
+      setEmail("");
+      setPassword("");
+      setFullName("");
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      console.error("Sign up error:", error);
       toast({
         variant: "destructive",
         title: "Sign up failed",
@@ -87,19 +106,30 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Provide more helpful error messages
+        if (error.message.includes("Invalid login credentials")) {
+          throw new Error("Invalid email or password. Please check your credentials and try again.");
+        } else if (error.message.includes("Email not confirmed")) {
+          throw new Error("Please confirm your email address before signing in. Check your inbox for the confirmation link.");
+        }
+        throw error;
+      }
 
-      toast({
-        title: "Welcome back!",
-        description: "You've successfully signed in.",
-      });
+      if (data.session) {
+        toast({
+          title: "Welcome back!",
+          description: "You've successfully signed in.",
+        });
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
+      console.error("Sign in error:", error);
       toast({
         variant: "destructive",
         title: "Sign in failed",
