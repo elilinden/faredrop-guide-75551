@@ -190,7 +190,9 @@ const TripNew = () => {
 
     if (segmentsToApply.length === 0 && routeFields.origin_iata && routeFields.destination_iata) {
       const firstFlight = normalizedFlightNumbers?.[0];
-      const derivedCarrier = (parsed.airline || (firstFlight ? firstFlight.slice(0, 2) : selectedAirline) || '').toUpperCase();
+      const derivedCarrierRaw = (parsed.airline || (firstFlight ? firstFlight.slice(0, 2) : selectedAirline) || '').toUpperCase();
+      const validAirlines = ['AA', 'DL', 'UA', 'AS', 'WN', 'B6'] as const;
+      const derivedCarrier = validAirlines.includes(derivedCarrierRaw as any) ? derivedCarrierRaw as 'AA' | 'DL' | 'UA' | 'AS' | 'WN' | 'B6' : undefined;
       const derivedFlightNumber = firstFlight ? firstFlight.replace(/^[A-Z]{2}/, '') : '';
       segmentsToApply = [
         {
