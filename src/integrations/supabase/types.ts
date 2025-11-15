@@ -321,10 +321,12 @@ export type Database = {
           price_mode: string | null
           rbd: string | null
           return_date: string | null
+          route_display: string | null
           status: string
           ticket_expiration: string | null
           ticket_number: string | null
           total_duration_minutes: number | null
+          travel_dates_display: string | null
           trip_type: string | null
           user_id: string
         }
@@ -366,10 +368,12 @@ export type Database = {
           price_mode?: string | null
           rbd?: string | null
           return_date?: string | null
+          route_display?: string | null
           status?: string
           ticket_expiration?: string | null
           ticket_number?: string | null
           total_duration_minutes?: number | null
+          travel_dates_display?: string | null
           trip_type?: string | null
           user_id: string
         }
@@ -411,10 +415,12 @@ export type Database = {
           price_mode?: string | null
           rbd?: string | null
           return_date?: string | null
+          route_display?: string | null
           status?: string
           ticket_expiration?: string | null
           ticket_number?: string | null
           total_duration_minutes?: number | null
+          travel_dates_display?: string | null
           trip_type?: string | null
           user_id?: string
         }

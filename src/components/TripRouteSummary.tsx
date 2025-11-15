@@ -32,7 +32,15 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
 
   // Derive route from multiple sources (with priority order)
   const deriveRoute = () => {
-    // 1. Try segments
+    // 1. Try route_display from lookup (Delta parsing)
+    if (trip.route_display) {
+      const parts = trip.route_display.split("→").map((p: string) => p.trim());
+      if (parts.length >= 2) {
+        return { origin: parts[0], destination: parts[parts.length - 1], source: "route_display" };
+      }
+    }
+
+    // 2. Try segments
     const validSegs = segments.filter(s => s.depart_airport && s.arrive_airport);
     if (validSegs.length > 0) {
       const origin = validSegs[0].depart_airport;
@@ -40,7 +48,7 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
       return { origin, destination, source: "segments" };
     }
 
-    // 2. Try full_route
+    // 3. Try full_route
     if (trip.full_route) {
       const parts = trip.full_route.split("→").map((p: string) => p.trim());
       if (parts.length >= 2) {
@@ -48,7 +56,7 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
       }
     }
 
-    // 3. Try origin_iata/destination_iata
+    // 4. Try origin_iata/destination_iata
     if (trip.origin_iata && trip.destination_iata) {
       return { origin: trip.origin_iata, destination: trip.destination_iata, source: "trip_fields" };
     }
@@ -58,7 +66,13 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
 
   // Derive dates from multiple sources
   const deriveDates = () => {
-    // 1. Try segments
+    // 1. Check if we have travel_dates_display - use it for display only
+    if (trip.travel_dates_display) {
+      // Return as-is for display, without parsing
+      return { displayText: trip.travel_dates_display, source: "travel_dates_display" };
+    }
+
+    // 2. Try segments
     const validSegs = segments.filter(s => s.depart_datetime);
     if (validSegs.length > 0) {
       const departDate = new Date(validSegs[0].depart_datetime);
@@ -66,14 +80,14 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
       return { departDate, returnDate, source: "segments" };
     }
 
-    // 2. Try trip fields
+    // 3. Try trip fields
     if (trip.depart_date) {
       const departDate = new Date(trip.depart_date);
       const returnDate = trip.return_date ? new Date(trip.return_date) : null;
       return { departDate, returnDate, source: "trip_fields" };
     }
 
-    // 3. Try departure_date field
+    // 4. Try departure_date field
     if (trip.departure_date) {
       const departDate = new Date(trip.departure_date);
       return { departDate, returnDate: null, source: "departure_date" };
@@ -266,7 +280,7 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
             <Calendar className="w-4 h-4" />
             <span>Travel Dates</span>
           </div>
-          {!isEditingDates && dates && (
+          {!isEditingDates && dates && !dates.displayText && (
             <Button
               variant="ghost"
               size="sm"
@@ -283,12 +297,18 @@ export const TripRouteSummary = ({ trip, segments, onUpdate }: TripRouteSummaryP
 
         {!isEditingDates ? (
           dates ? (
-            <div className="text-sm">
-              {format(dates.departDate, "MMM d, yyyy")}
-              {dates.returnDate && (
-                <span> - {format(dates.returnDate, "MMM d, yyyy")}</span>
-              )}
-            </div>
+            dates.displayText ? (
+              // Display the pre-formatted travel dates from Delta
+              <div className="text-sm">{dates.displayText}</div>
+            ) : (
+              // Format the parsed dates
+              <div className="text-sm">
+                {dates.departDate && format(dates.departDate, "MMM d, yyyy")}
+                {dates.returnDate && (
+                  <span> - {format(dates.returnDate, "MMM d, yyyy")}</span>
+                )}
+              </div>
+            )
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">No date data</span>
