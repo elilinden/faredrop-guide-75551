@@ -240,6 +240,14 @@ function adjustArrivalIfNextDay(departIso: string | null, arriveIso: string | nu
   return arriveIso;
 }
 
+// Helper to extract airport code from container text
+function extractAirportCode($el: cheerio.Cheerio<cheerio.Element>): string | undefined {
+  // Look for patterns like "(LGA)" or "(TQO)" in the text
+  const locationText = $el.find(".td-fc-dept-arr-airport, .td-flight-point-city").text().trim() || $el.text().trim();
+  const match = locationText.match(/\(([A-Z]{3})\)/);
+  return match?.[1];
+}
+
 // Parse Delta trip metadata from HTML using Cheerio
 function parseDeltaTripMetadata(html: string): Partial<TripData> {
   const $ = cheerio.load(html);
@@ -253,16 +261,12 @@ function parseDeltaTripMetadata(html: string): Partial<TripData> {
     const params = new URLSearchParams(query);
 
     const tripType = params.get("v3") || undefined;
-    const origin = params.get("v4") || undefined;
-    const destination = params.get("v5") || undefined;
     const departDateRaw = params.get("v10");
     const returnDateRaw = params.get("v11");
 
     trip.tripType = tripType === "oneway" ? "one-way" : tripType === "roundtrip" ? "round-trip" : null;
-    trip.origin_iata = origin;
-    trip.destination_iata = destination;
 
-    console.log("[lookup] Delta analytics data:", { tripType, origin, destination, departDateRaw, returnDateRaw });
+    console.log("[lookup] Delta analytics data:", { tripType, departDateRaw, returnDateRaw });
 
     // Parse departure/arrival time blocks from DOM
     let departTimeText: string | undefined;
@@ -271,26 +275,39 @@ function parseDeltaTripMetadata(html: string): Partial<TripData> {
     let arriveDateText: string | undefined;
 
     $(".td-departure-arrival-container").each((_, el) => {
-      const label = $(el).find(".td-flight-point-text").first().text().trim().toLowerCase();
-      const time = $(el).find(".td-flight-point-time").first().text().trim();
-      const date = $(el).find(".td-flight-point-date").first().text().trim();
+      const $el = $(el);
+      const label = $el.find(".td-flight-point-text").first().text().trim().toLowerCase();
+      const time = $el.find(".td-flight-point-time").first().text().trim();
+      const date = $el.find(".td-flight-point-date").first().text().trim();
+      const airportCode = extractAirportCode($el);
 
-      if (label.startsWith("depart") && !departTimeText) {
-        departTimeText = time;
-        departDateText = date;
+      if (label.startsWith("depart")) {
+        // First DEPART block → trip origin
+        if (!trip.origin_iata && airportCode) {
+          trip.origin_iata = airportCode;
+        }
+        if (!departTimeText) {
+          departTimeText = time;
+          departDateText = date;
+        }
       }
       if (label.startsWith("arrive")) {
+        // Last ARRIVE block → final destination
+        if (airportCode) {
+          trip.destination_iata = airportCode;
+        }
         arriveTimeText = time;
         arriveDateText = date;
       }
     });
 
     console.log("[lookup] Delta time blocks:", { departTimeText, departDateText, arriveTimeText, arriveDateText });
+    console.log("[lookup] Delta extracted airport codes:", { origin: trip.origin_iata, destination: trip.destination_iata });
 
-    // Build route display
-    if (origin && destination) {
-      trip.route_display = `${origin} → ${destination}`;
-      trip.fullRoute = `${origin} → ${destination}`;
+    // Build route display from extracted airport codes
+    if (trip.origin_iata && trip.destination_iata) {
+      trip.route_display = `${trip.origin_iata} → ${trip.destination_iata}`;
+      trip.fullRoute = `${trip.origin_iata} → ${trip.destination_iata}`;
     }
 
     // Build travel dates display
