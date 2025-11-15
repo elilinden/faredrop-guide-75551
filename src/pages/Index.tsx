@@ -29,6 +29,11 @@ const Index = () => {
             <span className="font-bold text-xl">FareDrop Guide</span>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" asChild>
+              <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
+                Dashboard
+              </a>
+            </Button>
             <Button variant="ghost" onClick={() => navigate("/faq")}>
               FAQs
             </Button>

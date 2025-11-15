@@ -112,6 +112,11 @@ const Dashboard = () => {
             <span className="text-xl font-bold">FareDrop Guide</span>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" asChild>
+              <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
+                Dashboard
+              </a>
+            </Button>
             <Button variant="outline" onClick={handleSignOut}>
               Sign Out
             </Button>

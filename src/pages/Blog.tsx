@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { SiteFooter } from "@/components/SiteFooter";
 
 const articleSections = [
@@ -54,6 +55,11 @@ export default function Blog() {
               <span>Published: November 15, 2025</span>
               <span>Estimated read time: 4 minutes</span>
             </div>
+            <Button variant="outline" asChild className="w-fit">
+              <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
+                Dashboard
+              </a>
+            </Button>
           </header>
 
           <p className="text-lg leading-relaxed text-muted-foreground">

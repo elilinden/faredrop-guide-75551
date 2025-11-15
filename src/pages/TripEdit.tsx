@@ -298,13 +298,18 @@ const TripEdit = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
+          <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
             <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
               <Plane className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
           </Link>
+          <Button variant="outline" asChild>
+            <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
+              Dashboard
+            </a>
+          </Button>
         </div>
       </header>
 
