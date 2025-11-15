@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import * as cheerio from "https://esm.sh/cheerio@1.0.0-rc.12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -610,6 +611,14 @@ Deno.serve(async (req) => {
     const html = await response.text();
     console.log("[lookup] Received HTML, length:", html.length);
     
+    // Parse Delta-specific metadata if this is a Delta trip
+    let deltaMetadata: Partial<TripData> = {};
+    if (airline.toLowerCase() === "dl" || airline.toLowerCase() === "delta") {
+      console.log("[lookup] Parsing Delta trip metadata...");
+      deltaMetadata = parseDeltaTripMetadata(html);
+      console.log("[lookup] Delta metadata parsed:", deltaMetadata);
+    }
+    
     // Log multiple sections to find where flight data might be
     console.log("[lookup] HTML start (0-1000):", html.substring(0, 1000));
     console.log("[lookup] HTML middle section (50000-51000):", html.substring(50000, 51000));
@@ -678,17 +687,21 @@ Deno.serve(async (req) => {
     const tripData: TripData = {
       airline: airline.charAt(0).toUpperCase() + airline.slice(1),
       confirmation: confirmationCode,
-      tripType: inferredTripType,
-      destination: null, // Will be set from last segment below
+      tripType: deltaMetadata.tripType ?? inferredTripType,
+      destination: deltaMetadata.destination_iata ?? null,
       ticketExpiration: extractWithRegex(html, [/ticket expires?[:\s]+([\w\s,]+)/i, /expiration[:\s]+([\w\s,]+)/i]),
-      fullRoute: null, // Will be built from segments below
+      fullRoute: deltaMetadata.fullRoute ?? null,
       totalDuration: totalDurationMinutes !== null ? String(totalDurationMinutes) : null,
       passengerName: `${firstName || ""} ${lastName}`.trim(),
       loyaltyStatus: extractWithRegex(html, [/(?:skymiles|medallion)[:\s]+(\w+)/i]),
-      fareClass: null, // Don't extract fare class - not useful
+      fareClass: null,
       eticketNumber: extractWithRegex(html, [/e-?ticket[:\s#]+([\d-]+)/i, /ticket (?:number|#)[:\s]+([\d-]+)/i]),
       isRefundable: html.toLowerCase().includes("refundable") && !html.toLowerCase().includes("non-refundable"),
-      departureDate: null, // Will be set from first segment below
+      departureDate: deltaMetadata.departureDate ?? null,
+      route_display: deltaMetadata.route_display,
+      travel_dates_display: deltaMetadata.travel_dates_display,
+      origin_iata: deltaMetadata.origin_iata,
+      destination_iata: deltaMetadata.destination_iata,
     };
 
     // Build fullRoute from valid segments only
