@@ -6,6 +6,7 @@ import { TripCard } from "@/components/TripCard";
 import { DashboardInsights } from "@/components/DashboardInsights";
 import { AddFlightModal } from "@/components/AddFlightModal";
 import { Plane, Plus, Settings } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 import { type AirlineKey } from "@/lib/airlines";
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -91,15 +92,24 @@ const Dashboard = () => {
     await supabase.auth.signOut();
     navigate("/");
   };
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  return <div className="min-h-screen bg-background">
+  if (loading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <main className="flex flex-1 items-center justify-center">Loading...</main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="container mx-auto flex items-center justify-between px-4 py-4">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-              <Plane className="w-5 h-5 text-primary-foreground" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
+              <Plane className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl">FareDrop Guide</span>
+            <span className="text-xl font-bold">FareDrop Guide</span>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleSignOut}>
@@ -119,38 +129,54 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        {trips.length > 0 && <DashboardInsights tripsAddedThisWeek={insights.tripsAddedThisWeek} activeMonitors={insights.activeMonitors} potentialSavings={insights.potentialSavings} />}
+      <main className="container mx-auto flex-1 px-4 py-8">
+        {trips.length > 0 && (
+          <DashboardInsights
+            tripsAddedThisWeek={insights.tripsAddedThisWeek}
+            activeMonitors={insights.activeMonitors}
+            potentialSavings={insights.potentialSavings}
+          />
+        )}
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <h2 className="text-2xl font-bold">My Flights</h2>
           <Button variant="outline" asChild>
-            
+            <Link to="/trips/new">Add Trip</Link>
           </Button>
         </div>
 
-        {trips.length === 0 ? <div className="text-center py-16 text-muted-foreground">
+        {trips.length === 0 ? (
+          <div className="py-16 text-center text-muted-foreground">
             <p>No trips yet. Add your first booked flight to get started!</p>
-          </div> : <div className="space-y-6">
+          </div>
+        ) : (
+          <div className="space-y-6">
             {["AA", "DL", "UA", "AS"].map(airline => {
-          const airlineTrips = trips.filter(t => t.airline === airline);
-          if (airlineTrips.length === 0) return null;
-          return <div key={airline}>
-                  <h2 className="text-lg font-semibold mb-3">
+              const airlineTrips = trips.filter(t => t.airline === airline);
+              if (airlineTrips.length === 0) return null;
+              return (
+                <div key={airline}>
+                  <h2 className="mb-3 text-lg font-semibold">
                     {airline === "AA" && "American Airlines"}
                     {airline === "DL" && "Delta Air Lines"}
                     {airline === "UA" && "United Airlines"}
                     {airline === "AS" && "Alaska Airlines"}
                   </h2>
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {airlineTrips.map(trip => <TripCard key={trip.id} trip={trip} segments={segmentsMap[trip.id] || []} />)}
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {airlineTrips.map(trip => (
+                      <TripCard key={trip.id} trip={trip} segments={segmentsMap[trip.id] || []} />
+                    ))}
                   </div>
-                </div>;
-        })}
-          </div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
 
+      <SiteFooter />
       <AddFlightModal open={addFlightOpen} onOpenChange={setAddFlightOpen} onSuccess={fetchData} />
-    </div>;
+    </div>
+  );
 };
 export default Dashboard;

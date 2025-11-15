@@ -37,6 +37,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { type AirlineKey } from "@/lib/airlines";
 import { toast } from "@/hooks/use-toast";
 import { logAudit } from "@/lib/audit";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const formatDuration = (minutes?: number | null) => {
   if (!minutes || minutes <= 0) return null;
@@ -155,7 +156,12 @@ const TripDetail = () => {
   }, [autoRefresh, id]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <main className="flex flex-1 items-center justify-center">Loading...</main>
+        <SiteFooter />
+      </div>
+    );
   }
 
   if (!trip) return null;
@@ -369,7 +375,7 @@ const TripDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center gap-2">
           <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
@@ -379,7 +385,7 @@ const TripDetail = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto flex-1 px-4 py-8">
         <div className="flex items-center justify-between mb-4">
           <Link to="/dashboard">
             <Button variant="ghost" size="sm">
@@ -767,6 +773,8 @@ const TripDetail = () => {
           confirmationCode={trip.confirmation_code}
         />
       </main>
+
+      <SiteFooter />
     </div>
   );
 };

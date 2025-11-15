@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ArrowLeft, Search, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SiteFooter } from "@/components/SiteFooter";
 
 interface FlightSegment {
   flightNumber: string;
@@ -93,8 +94,8 @@ export default function Lookup() {
   const isFormValid = formData.confirmationCode && formData.lastName && formData.airline;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container max-w-4xl mx-auto px-4 py-8">
+    <div className="flex min-h-screen flex-col bg-background">
+      <main className="container mx-auto flex-1 max-w-4xl px-4 py-8">
         <Button
           variant="ghost"
           onClick={() => navigate(-1)}
@@ -278,7 +279,9 @@ export default function Lookup() {
             </Card>
           )}
         </div>
-      </div>
+      </main>
+
+      <SiteFooter />
     </div>
   );
 }

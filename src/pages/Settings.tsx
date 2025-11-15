@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plane, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { SiteFooter } from "@/components/SiteFooter";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -94,11 +95,16 @@ const Settings = () => {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="flex min-h-screen flex-col bg-background">
+        <main className="flex flex-1 items-center justify-center">Loading...</main>
+        <SiteFooter />
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center gap-2">
           <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
@@ -108,7 +114,7 @@ const Settings = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
+      <main className="container mx-auto flex-1 px-4 py-8 max-w-3xl">
         <div className="mb-6">
           <Link to="/dashboard">
             <Button variant="ghost" size="sm">
@@ -273,6 +279,8 @@ const Settings = () => {
           </Card>
         </div>
       </main>
+
+      <SiteFooter />
     </div>
   );
 };

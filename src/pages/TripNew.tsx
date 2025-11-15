@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Plane, ChevronDown, Plus, Trash2, Info, AlertCircle, ExternalLink } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -321,7 +322,8 @@ const TripNew = () => {
       setLoading(false);
     }
   };
-  return <div className="min-h-screen bg-background">
+  return (
+    <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
           <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit">
@@ -333,7 +335,7 @@ const TripNew = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
+      <main className="container mx-auto flex-1 px-4 py-8 max-w-2xl">
         <h1 className="text-3xl font-bold mb-2">Add Your Trip</h1>
         <p className="text-sm text-muted-foreground mb-6 flex items-start gap-2">
           <Info className="w-4 h-4 mt-0.5 shrink-0" />
@@ -541,6 +543,8 @@ const TripNew = () => {
           </TabsContent>
         </Tabs>
       </main>
-    </div>;
+      <SiteFooter />
+    </div>
+  );
 };
 export default TripNew;
