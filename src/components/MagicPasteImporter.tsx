@@ -21,11 +21,27 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-magic-paste`, {
+      const supabaseUrl =
+        import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+        (typeof window !== "undefined" ? (window as any).__SUPABASE_URL__ : "");
+      const supabaseAnon =
+        import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        (typeof window !== "undefined" ? (window as any).__SUPABASE_ANON__ : "");
+
+      if (!supabaseUrl || !supabaseAnon) {
+        console.warn("Supabase env vars missing for magic paste import. URL:", supabaseUrl, " ANON:", supabaseAnon ? "***" : "MISSING");
+        setParsed({
+          confidence: 'low',
+          notes: 'Supabase is not configured. Please set the Supabase URL and anon key.',
+        });
+        return;
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/parse-magic-paste`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${supabaseAnon}`,
         },
         body: JSON.stringify({ text: rawText }),
       });

@@ -75,7 +75,7 @@ const TripEdit = () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
-          navigate("/auth");
+          navigate("/sign-in");
           return;
         }
 
@@ -180,7 +180,7 @@ const TripEdit = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        navigate("/auth");
+        navigate("/sign-in");
         return;
       }
 
