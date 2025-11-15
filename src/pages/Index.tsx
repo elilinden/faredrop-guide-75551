@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Plane, TrendingDown, Bell, Shield } from "lucide-react";
@@ -21,17 +21,24 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-b from-background to-muted">
       <header className="container mx-auto px-4 py-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <Link
+            to="/"
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity w-fit"
+            aria-label="FareDrop Guide home"
+          >
             <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
               <Plane className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="font-bold text-xl">FareDrop Guide</span>
-          </div>
-          <div className="flex gap-2">
+          </Link>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => navigate("/faq")}>
+              FAQs
+            </Button>
             <Button variant="ghost" onClick={() => navigate("/auth")}>
               Sign In
             </Button>
-            <Button onClick={() => navigate("/auth")}>
+            <Button onClick={() => navigate("/auth")}> 
               Get Started
             </Button>
           </div>
@@ -49,12 +56,15 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="flex gap-4 justify-center">
-            <Button size="lg" onClick={() => navigate("/auth")}>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Button size="lg" onClick={() => navigate("/auth")}> 
               Start Tracking Flights
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate("/lookup")}>
+            <Button size="lg" variant="outline" onClick={() => navigate("/lookup")}> 
               Try Lookup Tool
+            </Button>
+            <Button size="lg" variant="ghost" onClick={() => navigate("/faq")}> 
+              Explore FAQs
             </Button>
           </div>
 
@@ -92,9 +102,32 @@ const Index = () => {
         </div>
       </main>
 
-      <footer className="container mx-auto px-4 py-8 mt-16 border-t">
-        <div className="text-center text-sm text-muted-foreground">
+      <footer className="container mx-auto mt-16 border-t px-4 py-8">
+        <div className="flex flex-col items-center gap-4 text-center text-sm text-muted-foreground md:flex-row md:justify-between md:text-left">
           <p>© 2025 FareDrop Guide. Track smarter, save more.</p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate("/faq")}>
+              FAQs
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/blog")}>
+              Blog
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/about")}>
+              About Us
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/contact")}>
+              Contact Us
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/terms")}>
+              Terms of Service
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/privacy")}>
+              Privacy Policy
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate("/cookies")}>
+              Cookie Settings
+            </Button>
+          </div>
         </div>
       </footer>
     </div>
