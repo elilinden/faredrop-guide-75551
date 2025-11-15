@@ -1,31 +1,5 @@
-// Delta My Trips HTML parser shared between browser (Node/Vite) and Supabase Edge (Deno)
-// Attempts to use Cheerio when available, with graceful fallback to lightweight string parsing.
-
-type CheerioModule = {
-  load: (html: string) => any;
-};
-
-let cheerioModule: CheerioModule | null = null;
-
-if (typeof Deno !== "undefined") {
-  try {
-    cheerioModule = await import("https://esm.sh/cheerio@1.0.0-rc.12");
-  } catch (err) {
-    console.warn("[delta-parser] Failed to load cheerio in Deno runtime", err);
-    cheerioModule = null;
-  }
-} else {
-  try {
-    cheerioModule = await import("cheerio");
-  } catch (nodeErr) {
-    try {
-      cheerioModule = await import("https://esm.sh/cheerio@1.0.0-rc.12");
-    } catch (remoteErr) {
-      console.warn("[delta-parser] Failed to load cheerio in Node runtime", remoteErr);
-      cheerioModule = null;
-    }
-  }
-}
+// Delta My Trips HTML parser for browser/Vite (client-side)
+// Uses lightweight string parsing only - no Cheerio needed
 
 export type ParsedTripDelta = {
   pnr?: string;
@@ -37,28 +11,18 @@ export type ParsedTripDelta = {
   confidence?: "exact-flight" | "route-estimate" | "unknown";
 };
 
-function collectBeaconSources(html: string, $: any | null): string[] {
+function collectBeaconSources(html: string): string[] {
   const sources: string[] = [];
-  if ($) {
-    $('script[src*="smetrics.delta.com/b/ss/"]').each((_: unknown, el: any) => {
-      const src = $(el).attr("src");
-      if (src) sources.push(src);
-    });
+  const regex = /<script[^>]+src=["']([^"']*smetrics\.delta\.com\/b\/ss\/[^"']*)["'][^>]*>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(html))) {
+    sources.push(match[1]);
   }
-
-  if (!sources.length) {
-    const regex = /<script[^>]+src=["']([^"']*smetrics\.delta\.com\/b\/ss\/[^"']*)["'][^>]*>/gi;
-    let match: RegExpExecArray | null;
-    while ((match = regex.exec(html))) {
-      sources.push(match[1]);
-    }
-  }
-
   return sources;
 }
 
-function parseBeaconParams(html: string, $: any | null): URLSearchParams | null {
-  const sources = collectBeaconSources(html, $);
+function parseBeaconParams(html: string): URLSearchParams | null {
+  const sources = collectBeaconSources(html);
   if (!sources.length) return null;
 
   const merged = new URLSearchParams();
@@ -93,14 +57,7 @@ function stripHtml(raw: string): string {
     .trim();
 }
 
-function extractBodyText(html: string, $: any | null): string {
-  if ($) {
-    try {
-      return $("body").text();
-    } catch (_err) {
-      // fall back below
-    }
-  }
+function extractBodyText(html: string): string {
   return stripHtml(html);
 }
 
@@ -116,11 +73,9 @@ function extractFlightNumbers(text: string): string[] {
 }
 
 export function parseDeltaMyTripsHTML(html: string): ParsedTripDelta {
-  const cheerio = cheerioModule;
-  const $ = cheerio ? cheerio.load(html) : null;
   const out: ParsedTripDelta = { confidence: "unknown" };
 
-  const beaconParams = parseBeaconParams(html, $);
+  const beaconParams = parseBeaconParams(html);
   if (beaconParams) {
     out.pnr = beaconParams.get("v91") ?? undefined;
     out.origin_iata = beaconParams.get("v4") ?? undefined;
@@ -137,7 +92,7 @@ export function parseDeltaMyTripsHTML(html: string): ParsedTripDelta {
     }
   }
 
-  const bodyText = extractBodyText(html, $);
+  const bodyText = extractBodyText(html);
 
   if (!out.pnr) {
     const pnrMatch = bodyText.match(/\b([A-Z0-9]{6})\b/);
