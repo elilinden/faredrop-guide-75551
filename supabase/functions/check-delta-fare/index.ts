@@ -49,7 +49,7 @@ function snippet(v: unknown, max = 2000): string {
 }
 
 async function log(
-  client: ReturnType<typeof createClient>,
+  client: any,
   traceId: string,
   stage: string,
   ok: boolean,
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
   const t0 = Date.now();
   const traceId = crypto.randomUUID();
   const cors = new Headers({ ...corsHeaders, "X-Trace-Id": traceId });
-  let admin: ReturnType<typeof createClient> | null = null;
+  let admin: any = null;
 
   const jsonHeaders = () => {
     const headers = new Headers(cors);
