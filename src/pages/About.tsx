@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { SiteFooter } from "@/components/SiteFooter";
 
 const About = () => {
@@ -15,6 +16,13 @@ const About = () => {
               click takes you to your airline’s Manage/Change page so you can confirm any credit and decide what to do—on your
               terms.
             </p>
+            <div className="flex justify-center">
+              <Button variant="outline" asChild>
+                <a href="https://fareguardian.lovable.app/#/dashboard" target="_blank" rel="noreferrer">
+                  Dashboard
+                </a>
+              </Button>
+            </div>
           </header>
 
           <section className="space-y-4">
