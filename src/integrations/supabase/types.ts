@@ -213,36 +213,63 @@ export type Database = {
       }
       segments: {
         Row: {
+          aircraft: string | null
           arrive_airport: string
           arrive_datetime: string
+          arrive_gate: string | null
+          arrive_terminal: string | null
           carrier: string
           created_at: string
           depart_airport: string
           depart_datetime: string
+          depart_gate: string | null
+          depart_terminal: string | null
           flight_number: string
           id: string
+          is_change_of_plane: boolean | null
+          layover_duration_minutes: number | null
+          segment_index: number | null
+          status: string | null
           trip_id: string
         }
         Insert: {
+          aircraft?: string | null
           arrive_airport: string
           arrive_datetime: string
+          arrive_gate?: string | null
+          arrive_terminal?: string | null
           carrier: string
           created_at?: string
           depart_airport: string
           depart_datetime: string
+          depart_gate?: string | null
+          depart_terminal?: string | null
           flight_number: string
           id?: string
+          is_change_of_plane?: boolean | null
+          layover_duration_minutes?: number | null
+          segment_index?: number | null
+          status?: string | null
           trip_id: string
         }
         Update: {
+          aircraft?: string | null
           arrive_airport?: string
           arrive_datetime?: string
+          arrive_gate?: string | null
+          arrive_terminal?: string | null
           carrier?: string
           created_at?: string
           depart_airport?: string
           depart_datetime?: string
+          depart_gate?: string | null
+          depart_terminal?: string | null
           flight_number?: string
           id?: string
+          is_change_of_plane?: boolean | null
+          layover_duration_minutes?: number | null
+          segment_index?: number | null
+          status?: string | null
           trip_id?: string
         }
         Relationships: [
@@ -268,9 +295,13 @@ export type Database = {
           depart_date: string | null
           departure_date: string | null
           destination_iata: string | null
+          eticket_number: string | null
+          fare_class: string | null
           first_name: string | null
           flight_numbers: string[] | null
+          full_route: string | null
           id: string
+          is_refundable: boolean | null
           last_checked_at: string | null
           last_confidence: string | null
           last_name: string
@@ -279,6 +310,7 @@ export type Database = {
           last_public_provider: string | null
           last_signal_at: string | null
           last_signal_price: number | null
+          loyalty_status: string | null
           monitor_frequency_minutes: number | null
           monitor_threshold: number | null
           monitoring_enabled: boolean | null
@@ -290,7 +322,10 @@ export type Database = {
           rbd: string | null
           return_date: string | null
           status: string
+          ticket_expiration: string | null
           ticket_number: string | null
+          total_duration_minutes: number | null
+          trip_type: string | null
           user_id: string
         }
         Insert: {
@@ -305,9 +340,13 @@ export type Database = {
           depart_date?: string | null
           departure_date?: string | null
           destination_iata?: string | null
+          eticket_number?: string | null
+          fare_class?: string | null
           first_name?: string | null
           flight_numbers?: string[] | null
+          full_route?: string | null
           id?: string
+          is_refundable?: boolean | null
           last_checked_at?: string | null
           last_confidence?: string | null
           last_name: string
@@ -316,6 +355,7 @@ export type Database = {
           last_public_provider?: string | null
           last_signal_at?: string | null
           last_signal_price?: number | null
+          loyalty_status?: string | null
           monitor_frequency_minutes?: number | null
           monitor_threshold?: number | null
           monitoring_enabled?: boolean | null
@@ -327,7 +367,10 @@ export type Database = {
           rbd?: string | null
           return_date?: string | null
           status?: string
+          ticket_expiration?: string | null
           ticket_number?: string | null
+          total_duration_minutes?: number | null
+          trip_type?: string | null
           user_id: string
         }
         Update: {
@@ -342,9 +385,13 @@ export type Database = {
           depart_date?: string | null
           departure_date?: string | null
           destination_iata?: string | null
+          eticket_number?: string | null
+          fare_class?: string | null
           first_name?: string | null
           flight_numbers?: string[] | null
+          full_route?: string | null
           id?: string
+          is_refundable?: boolean | null
           last_checked_at?: string | null
           last_confidence?: string | null
           last_name?: string
@@ -353,6 +400,7 @@ export type Database = {
           last_public_provider?: string | null
           last_signal_at?: string | null
           last_signal_price?: number | null
+          loyalty_status?: string | null
           monitor_frequency_minutes?: number | null
           monitor_threshold?: number | null
           monitoring_enabled?: boolean | null
@@ -364,7 +412,10 @@ export type Database = {
           rbd?: string | null
           return_date?: string | null
           status?: string
+          ticket_expiration?: string | null
           ticket_number?: string | null
+          total_duration_minutes?: number | null
+          trip_type?: string | null
           user_id?: string
         }
         Relationships: [
