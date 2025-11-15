@@ -70,6 +70,14 @@ const TripNew = () => {
   const [airportDisplayValues, setAirportDisplayValues] = useState<{
     [key: string]: string;
   }>({});
+  const [importedRouteFields, setImportedRouteFields] = useState<{
+    origin_iata?: string;
+    destination_iata?: string;
+    departure_date?: string;
+    return_date?: string | null;
+    flight_numbers?: string[];
+    last_confidence?: 'exact-flight' | 'route-estimate' | 'unknown';
+  } | null>(null);
   const {
     control,
     handleSubmit,
@@ -149,6 +157,24 @@ const TripNew = () => {
   const handleImport = (parsed: ParsedTrip) => {
     console.log('[handleImport] Received parsed data:', parsed);
 
+    const normalizedFlightNumbers = parsed.flight_numbers?.map(fn => fn.toUpperCase());
+    const routeFields = {
+      origin_iata: parsed.origin_iata?.toUpperCase(),
+      destination_iata: parsed.destination_iata?.toUpperCase(),
+      departure_date: parsed.departure_date,
+      return_date: parsed.return_date ?? null,
+      flight_numbers: normalizedFlightNumbers,
+      last_confidence: parsed.last_confidence
+    };
+    const hasRouteDetails = Boolean(
+      routeFields.origin_iata ||
+        routeFields.destination_iata ||
+        routeFields.departure_date ||
+        routeFields.return_date ||
+        (routeFields.flight_numbers && routeFields.flight_numbers.length > 0)
+    );
+    setImportedRouteFields(hasRouteDetails ? routeFields : null);
+
     // Fill form with parsed data
     if (parsed.airline) setValue("airline", parsed.airline);
     if (parsed.confirmation_code) setValue("confirmation_code", parsed.confirmation_code);
@@ -160,8 +186,26 @@ const TripNew = () => {
     if (parsed.notes) setValue("notes", parsed.notes);
 
     // Fill segments - ensure proper datetime format
-    if (parsed.segments && parsed.segments.length > 0) {
-      const formattedSegments = parsed.segments.map(seg => ({
+    let segmentsToApply = parsed.segments && parsed.segments.length > 0 ? [...parsed.segments] : [];
+
+    if (segmentsToApply.length === 0 && routeFields.origin_iata && routeFields.destination_iata) {
+      const firstFlight = normalizedFlightNumbers?.[0];
+      const derivedCarrier = (parsed.airline || (firstFlight ? firstFlight.slice(0, 2) : selectedAirline) || '').toUpperCase();
+      const derivedFlightNumber = firstFlight ? firstFlight.replace(/^[A-Z]{2}/, '') : '';
+      segmentsToApply = [
+        {
+          carrier: derivedCarrier,
+          flight_number: derivedFlightNumber,
+          depart_airport: routeFields.origin_iata,
+          arrive_airport: routeFields.destination_iata,
+          depart_datetime: routeFields.departure_date || '',
+          arrive_datetime: routeFields.return_date || ''
+        }
+      ];
+    }
+
+    if (segmentsToApply.length > 0) {
+      const formattedSegments = segmentsToApply.map(seg => ({
         carrier: seg.carrier || '',
         flight_number: seg.flight_number || '',
         depart_airport: seg.depart_airport || '',
@@ -220,11 +264,11 @@ const TripNew = () => {
       }
 
       // Extract flight details from segments for Amadeus pricing
-      let origin_iata = null;
-      let destination_iata = null;
-      let depart_date = null;
-      let return_date = null;
-      let flight_numbers: string[] = [];
+      let origin_iata = importedRouteFields?.origin_iata ?? null;
+      let destination_iata = importedRouteFields?.destination_iata ?? null;
+      let depart_date = importedRouteFields?.departure_date ?? null;
+      let return_date = importedRouteFields?.return_date ?? null;
+      let flight_numbers: string[] = importedRouteFields?.flight_numbers ? [...importedRouteFields.flight_numbers] : [];
       if (segments.length > 0) {
         const firstSeg = segments[0];
         const lastSeg = segments[segments.length - 1];
@@ -238,6 +282,9 @@ const TripNew = () => {
         }
         flight_numbers = segments.filter(seg => seg.flight_number).map(seg => `${seg.carrier}${seg.flight_number}`);
       }
+      origin_iata = origin_iata ? origin_iata.toUpperCase() : null;
+      destination_iata = destination_iata ? destination_iata.toUpperCase() : null;
+      flight_numbers = flight_numbers.map(fn => fn.toUpperCase());
 
       // Insert trip
       const {
@@ -257,6 +304,7 @@ const TripNew = () => {
         origin_iata,
         destination_iata,
         depart_date,
+        departure_date: depart_date,
         return_date,
         flight_numbers,
         adults: 1,

@@ -5,29 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Info, Sparkles } from "lucide-react";
+import type { ParsedTrip } from "@/lib/import/parsers";
 
 interface MagicPasteImporterProps {
   onImport: (data: ParsedTrip) => void;
 }
-
-type ParsedTrip = {
-  confirmation_code?: string;
-  airline?: string;
-  first_name?: string;
-  last_name?: string;
-  paid_total?: number;
-  currency?: string;
-  segments?: Array<{
-    carrier?: string;
-    flight_number?: string;
-    depart_airport?: string;
-    arrive_airport?: string;
-    depart_datetime?: string | null;
-    arrive_datetime?: string | null;
-  }>;
-  confidence: 'high' | 'medium' | 'low';
-  notes?: string;
-};
 
 export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
   const [rawText, setRawText] = useState('');
@@ -58,14 +40,25 @@ export const MagicPasteImporter = ({ onImport }: MagicPasteImporterProps) => {
           last_name: data.trip.passenger_names?.[0]?.split(' ').slice(1).join(' '),
           paid_total: data.trip.ticket_amount,
           currency: data.trip.currency,
-          segments: data.trip.flight_numbers?.map((fn: string, idx: number) => ({
-            carrier: data.trip.airline_code || '',
-            flight_number: fn,
-            depart_airport: idx === 0 ? data.trip.origin_iata : data.trip.destination_iata,
-            arrive_airport: idx === 0 ? data.trip.destination_iata : data.trip.origin_iata,
-            depart_datetime: data.trip.departure_date,
-            arrive_datetime: null,
-          })) || [],
+          origin_iata: data.trip.origin_iata || undefined,
+          destination_iata: data.trip.destination_iata || undefined,
+          departure_date: data.trip.departure_date || undefined,
+          return_date: data.trip.return_date ?? null,
+          flight_numbers: data.trip.flight_numbers?.map((fn: string) => fn.toUpperCase()) || undefined,
+          segments: data.trip.flight_numbers?.map((fn: string, idx: number) => {
+            const normalized = fn.toUpperCase();
+            const carrierCode = data.trip.airline_code || normalized.slice(0, 2);
+            const numericFlight = normalized.replace(/^[A-Z]{2}/, '');
+            return {
+              carrier: carrierCode || '',
+              flight_number: numericFlight,
+              depart_airport: idx === 0 ? data.trip.origin_iata : data.trip.destination_iata,
+              arrive_airport: idx === 0 ? data.trip.destination_iata : data.trip.origin_iata,
+              depart_datetime: data.trip.departure_date,
+              arrive_datetime: null,
+            };
+          }) || [],
+          last_confidence: data.trip.last_confidence,
           confidence: data.message ? 'low' : 'high',
           notes: data.message || 'Successfully extracted flight details',
         };
