@@ -19,6 +19,7 @@ import { EligibilityPill } from "@/components/EligibilityPill";
 import { AirlineTipsBox } from "@/components/airline/AirlineTipsBox";
 import { DeleteTripDialog } from "@/components/DeleteTripDialog";
 import { PriceHistoryChart } from "@/components/PriceHistoryChart";
+import { TripRouteSummary } from "@/components/TripRouteSummary";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Plane,
@@ -417,24 +418,23 @@ const TripDetail = () => {
                 <CardTitle>Trip Summary</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Top line: airline + route + PNR */}
+                {/* Top line: airline + PNR */}
                 <div>
                   <AirlineBadge airline={trip.airline as AirlineKey} className="mb-2" />
-                  <h2 className="text-xl font-bold">{displayRoute}</h2>
                   <p className="text-sm text-muted-foreground font-mono">
                     {trip.airline} · {trip.confirmation_code}
                   </p>
                 </div>
 
+                {/* Route and Dates with inline editing */}
+                <TripRouteSummary 
+                  trip={trip} 
+                  segments={segments}
+                  onUpdate={fetchTrip}
+                />
+
                 {/* Core trip facts */}
                 <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span>
-                      {trip.depart_date ? format(new Date(trip.depart_date), "MMM d, yyyy") : "Trip date not available"}
-                      {trip.return_date && ` - ${format(new Date(trip.return_date), "MMM d, yyyy")}`}
-                    </span>
-                  </div>
 
                   <div className="flex items-center gap-2">
                     <DollarSign className="w-4 h-4 text-muted-foreground" />
