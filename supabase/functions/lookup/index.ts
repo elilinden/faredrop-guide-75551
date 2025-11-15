@@ -406,6 +406,15 @@ function parseDeltaTripMetadata(html: string): Partial<TripData> {
 
     trip.tripType = tripType === "oneway" ? "one-way" : tripType === "roundtrip" ? "round-trip" : null;
 
+    const originFromAnalytics = params.get("v4");
+    const destinationFromAnalytics = params.get("v5");
+
+    if (!trip.origin_iata && originFromAnalytics) {
+      trip.origin_iata = originFromAnalytics.toUpperCase();
+    }
+    if (!trip.destination_iata && destinationFromAnalytics) {
+      trip.destination_iata = destinationFromAnalytics.toUpperCase();
+    }
     console.log("[lookup] Delta analytics data:", { tripType, departDateRaw, returnDateRaw });
 
     // Parse departure/arrival time blocks from DOM
