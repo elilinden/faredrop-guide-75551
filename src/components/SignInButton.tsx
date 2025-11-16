@@ -2,6 +2,13 @@ import React from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button, type ButtonProps } from "@/components/ui/button";
 
+function getCallbackUrl() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return `${window.location.origin}/#/auth/callback`;
+}
+
 async function preflightGoogle(): Promise<number> {
   if (typeof window === "undefined") {
     return 0;
@@ -16,8 +23,9 @@ async function preflightGoogle(): Promise<number> {
     return 0;
   }
 
+  const callbackUrl = getCallbackUrl();
   const authorizeUrl = `${baseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(
-    `${window.location.origin}/auth/callback`,
+    callbackUrl,
   )}`;
 
   try {
@@ -53,7 +61,7 @@ export const SignInButton = React.forwardRef<HTMLButtonElement, SignInButtonProp
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getCallbackUrl(),
           queryParams: { prompt: "select_account" },
         },
       });
