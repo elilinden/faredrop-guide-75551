@@ -66,31 +66,18 @@ const Auth = () => {
         throw new Error("Password must be at least 6 characters long");
       }
 
-      if (!supabaseUrl) {
-        throw new Error("Supabase URL is not configured. Please try again later.");
-      }
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/admin-signup`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password, fullName }),
-      });
-
-      const result = await response.json().catch(() => null);
-
-      if (!response.ok || !result?.ok) {
-        throw new Error(result?.error ?? "Unable to create your account. Please try again.");
-      }
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
       });
 
-      if (signInError) {
-        throw signInError;
+      if (error) {
+        throw error;
       }
 
       toast({
