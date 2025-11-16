@@ -20,6 +20,14 @@ import { Plane } from "lucide-react";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SignInButton } from "@/components/SignInButton";
 
+type SupabaseEnvWindow = Window & { __SUPABASE_URL__?: string };
+
+const supabaseUrl =
+  import.meta.env.NEXT_PUBLIC_SUPABASE_URL ||
+  (typeof window !== "undefined"
+    ? (window as SupabaseEnvWindow).__SUPABASE_URL__
+    : undefined);
+
 const Auth = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -58,31 +66,37 @@ const Auth = () => {
         throw new Error("Password must be at least 6 characters long");
       }
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-          emailRedirectTo: `${window.location.origin}/`,
+      if (!supabaseUrl) {
+        throw new Error("Supabase URL is not configured. Please try again later.");
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/admin-signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({ email, password, fullName }),
       });
 
-      if (error) throw error;
+      const result = await response.json().catch(() => null);
 
-      // Check if email confirmation is required
-      if (data?.user && !data.session) {
-        toast({
-          title: "Check your email",
-          description: "We sent you a confirmation link. Please check your email to activate your account.",
-        });
-      } else {
-        toast({
-          title: "Account created!",
-          description: "You can now sign in with your credentials.",
-        });
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error ?? "Unable to create your account. Please try again.");
       }
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        throw signInError;
+      }
+
+      toast({
+        title: "Account created!",
+        description: "You're all set to start using FareDrop Guide.",
+      });
       
       // Clear form
       setEmail("");
